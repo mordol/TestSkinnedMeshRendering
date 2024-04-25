@@ -190,6 +190,7 @@ namespace AnimationBaker.Editor
             GUILayout.Space(10);
             if (GUILayout.Button("Bake"))
             {
+                BakeAnimation();
                 Debug.Log("Bake");
             }
             
@@ -199,6 +200,28 @@ namespace AnimationBaker.Editor
                 EditorGUILayout.TextField("");
             }
             EditorGUILayout.EndHorizontal();
+        }
+
+        private bool BakeAnimation()
+        {
+            if (skinnedMeshRenderer == null)
+            {
+                Debug.LogError("Skinned Mesh Renderer is not set");
+                return false;
+            }
+            
+            if (animationClips == null || animationClips.Length == 0)
+            {
+                Debug.LogError("Animation Clips are not set");
+                return false;
+            }
+            
+            var bakedAnimation = AnimationBakerUtil.BakeAnimation(skinnedMeshRenderer, animationClips);
+            
+            // TODO: Save baked animation to asset and preview
+            AssetDatabase.CreateAsset(bakedAnimation.texture, "Assets/TestBakedTexture.asset");
+            
+            return true;
         }
     }
 }
