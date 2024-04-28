@@ -6,7 +6,7 @@ namespace AnimationBaker.Editor
 {
     public static class AnimationBakerUtil
     {
-        public static BakedAnimation BakeAnimation(SkinnedMeshRenderer skinnedMeshRenderer, AnimationClip[] animationClips)
+        public static BakedAnimation BakeAnimation(GameObject root, SkinnedMeshRenderer skinnedMeshRenderer, AnimationClip[] animationClips)
         {
             var bakedAnimation = new BakedAnimation();
             
@@ -46,7 +46,7 @@ namespace AnimationBaker.Editor
                     
                     // Sample animation
                     var time = j / animationClips[i].frameRate;
-                    animationClips[i].SampleAnimation(skinnedMeshRenderer.gameObject, time);
+                    animationClips[i].SampleAnimation(root, time);
 
                     bones = skinnedMeshRenderer.bones;
                     for (int k = 0; k < bones.Length; k++)
@@ -66,9 +66,11 @@ namespace AnimationBaker.Editor
                         // texData[boneIndex + 0 + baseIndex] = new half4(mtx.c0);
                         // texData[boneIndex + 1 + baseIndex] = new half4(mtx.c1);
                         // texData[boneIndex + 2 + baseIndex] = new half4(mtx.c2);
-                        texData[boneIndex + 0 + baseIndex] = new half4(mtx.GetRow(0));
-                        texData[boneIndex + 1 + baseIndex] = new half4(mtx.GetRow(1));
-                        texData[boneIndex + 2 + baseIndex] = new half4(mtx.GetRow(2));
+                        texData[baseIndex + boneIndex + 0] = new half4(mtx.GetRow(0));
+                        texData[baseIndex + boneIndex + 1] = new half4(mtx.GetRow(1));
+                        texData[baseIndex + boneIndex + 2] = new half4(mtx.GetRow(2));
+                        
+                        //Debug.Log($"frame{j}.bone{k}: {mtx.GetRow(0)} {mtx.GetRow(1)} {mtx.GetRow(2)}");
                     }
                 }
             }

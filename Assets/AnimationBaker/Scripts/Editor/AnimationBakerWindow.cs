@@ -13,8 +13,10 @@ namespace AnimationBaker.Editor
             GetWindow<AnimationBakerWindow>("Animation Baker");
         }
 
-        public SkinnedMeshRenderer skinnedMeshRenderer;
+        public GameObject characterRoot;
+        public SkinnedMeshRenderer[] skinnedMeshRenderers;
         public AnimationClip[] animationClips;
+        public Texture bakedTexture;
         
         Vector2 m_ScrollPos;
         bool m_ScrollFlag;
@@ -47,7 +49,7 @@ namespace AnimationBaker.Editor
 
         private void GUI_Settings_SkinnedMeshRenderer()
         {
-            EditorGUILayout.LabelField("Skinned Mesh Renderer", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("> Character", EditorStyles.boldLabel);
             
             Rect myRect = GUILayoutUtility.GetRect(0,30,GUILayout.ExpandWidth(true));
             GUI.Box(myRect,"Drag and Drop Prefab or FBX asset here");
@@ -63,56 +65,58 @@ namespace AnimationBaker.Editor
                 {
                     DragAndDrop.AcceptDrag();
                     
-                    if (DragAndDrop.objectReferences[0] != null)
+                    var go = DragAndDrop.objectReferences[0] as GameObject;
+
+                    if (go == null)
                     {
-                        skinnedMeshRenderer = FindSkinnedMeshRenderer(DragAndDrop.objectReferences[0]);
+                        EditorUtility.DisplayDialog("Error", "Please drag and drop GameObject", "OK");
                     }
+                    else if (go.scene.IsValid())
+                    {
+                        EditorUtility.DisplayDialog("Error", "Please drag and drop Prefab or FBX asset", "OK");
+                    }
+                    else
+                    {
+                        skinnedMeshRenderers = go.GetComponentsInChildren<SkinnedMeshRenderer>();
+                        if (skinnedMeshRenderers != null && skinnedMeshRenderers.Length > 0)
+                        {
+                            characterRoot = go;
+                        }
+                        else
+                        {
+                            EditorUtility.DisplayDialog("Error", "SkinnedMeshRenderer not found in the GameObject", "OK");
+                        }                        
+                    }
+                    
                     Event.current.Use();
                 }
             }
-            
+
             EditorGUILayout.BeginHorizontal();
             {
-                EditorGUILayout.LabelField("Skinned Mesh Renderer", GUILayout.Width(150));
-                skinnedMeshRenderer = (SkinnedMeshRenderer)EditorGUILayout.ObjectField(skinnedMeshRenderer, typeof(SkinnedMeshRenderer), false);
+                EditorGUILayout.LabelField("Root", GUILayout.Width(100));
+                characterRoot = (GameObject)EditorGUILayout.ObjectField(characterRoot, typeof(GameObject), false);
             }
             EditorGUILayout.EndHorizontal();
-        }
-        
-        private SkinnedMeshRenderer FindSkinnedMeshRenderer(UnityEngine.Object obj)
-        {
-            if (obj is SkinnedMeshRenderer)
-            {
-                return obj as SkinnedMeshRenderer;
-            }
             
-            if (obj is GameObject)
+            EditorGUILayout.LabelField("Skinned Mesh Renderer", GUILayout.Width(150));
+
+            using (new EditorGUI.DisabledScope(true))
             {
-                var go = obj as GameObject;
-                var smr = go.GetComponentInChildren<SkinnedMeshRenderer>();
-                if (smr != null)
+                for (int i = 0; skinnedMeshRenderers != null && i < skinnedMeshRenderers.Length; i++)
                 {
-                    return smr;
-                }
+                    EditorGUILayout.BeginHorizontal();
+                    {
+                        EditorGUILayout.ObjectField(skinnedMeshRenderers[i], typeof(SkinnedMeshRenderer), false);
+                    }
+                    EditorGUILayout.EndHorizontal();                
+                }                
             }
-            
-            var subAssets = AssetDatabase.LoadAllAssetRepresentationsAtPath(AssetDatabase.GetAssetPath(obj));
-            foreach (var subAsset in subAssets)
-            {
-                var go = subAsset as GameObject;
-                var smr = go.GetComponentInChildren<SkinnedMeshRenderer>();
-                if (smr != null)
-                {
-                    return smr;
-                }
-            }
-            
-            return null;
         }
         
         private void GUI_Settings_AnimationClips()
         {
-            EditorGUILayout.LabelField("Animation Clips", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("> Animation Clips", EditorStyles.boldLabel);
             
             Rect myRect = GUILayoutUtility.GetRect(0,30,GUILayout.ExpandWidth(true));
             GUI.Box(myRect,"Drag and Drop Animation Clips or folder here");
@@ -185,7 +189,7 @@ namespace AnimationBaker.Editor
             
         private void GUI_Settings_Output()
         {
-            EditorGUILayout.LabelField("Output", EditorStyles.boldLabel);
+            EditorGUILayout.LabelField("> Output", EditorStyles.boldLabel);
             
             GUILayout.Space(10);
             if (GUILayout.Button("Bake"))
@@ -196,15 +200,23 @@ namespace AnimationBaker.Editor
             
             EditorGUILayout.BeginHorizontal();
             {
-                EditorGUILayout.LabelField("Output Path", GUILayout.Width(150));
+                EditorGUILayout.LabelField("Output Path", GUILayout.Width(100));
                 EditorGUILayout.TextField("");
             }
             EditorGUILayout.EndHorizontal();
+            
+            // TODO: Show baked animation information (clips)
+            
+            if (bakedTexture != null)
+            {
+                EditorGUILayout.Space();
+                EditorGUI.DrawPreviewTexture(GUILayoutUtility.GetRect(0, 200, 0, 200), bakedTexture, null, ScaleMode.ScaleToFit);
+            }
         }
 
         private bool BakeAnimation()
         {
-            if (skinnedMeshRenderer == null)
+            if (skinnedMeshRenderers == null || skinnedMeshRenderers.Length == 0)
             {
                 Debug.LogError("Skinned Mesh Renderer is not set");
                 return false;
@@ -216,11 +228,20 @@ namespace AnimationBaker.Editor
                 return false;
             }
             
-            var bakedAnimation = AnimationBakerUtil.BakeAnimation(skinnedMeshRenderer, animationClips);
+            // TODO: Bake animation with multiple SkinnedMeshRenderers
+            var bakedAnimation = AnimationBakerUtil.BakeAnimation(characterRoot, skinnedMeshRenderers[0], animationClips);
             
-            // TODO: Save baked animation to asset and preview
+            Debug.Log($"Texture {bakedAnimation.texture.width} x {bakedAnimation.texture.height}");
+            foreach (var info in bakedAnimation.infos)
+            {
+                Debug.Log($"info: {info.name} row: {info.row} count: {info.count}");
+            }
+            
+            Debug.Log($"uvstep ({1f / (float)bakedAnimation.texture.width}, {1 / (float)bakedAnimation.texture.height})");
+            
+            bakedTexture = bakedAnimation.texture;
+            
             AssetDatabase.CreateAsset(bakedAnimation.texture, "Assets/TestBakedTexture.asset");
-            
             return true;
         }
     }

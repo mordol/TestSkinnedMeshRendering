@@ -10,7 +10,7 @@ namespace AnimationBaker
         public struct ClipInfo
         {
             public string name;
-            public int row;
+            public int row;         // first row index in the texture
             public int count;
         }
             
