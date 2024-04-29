@@ -53,19 +53,8 @@ namespace AnimationBaker.Editor
                     {
                         var bone = bones[k];
                         var boneIndex = k * 3;
-                        // var boneTransform = bone.localToWorldMatrix;
-                        // var boneTransformInv = bindPoses[k].inverse * boneTransform;
-                        //
-                        // var row1 = new float4(boneTransformInv.GetRow(0));
-                        // var row2 = new float4(boneTransformInv.GetRow(1));
-                        // var row3 = new float4(boneTransformInv.GetRow(2));
-                        // var row4 = new float4(0, 0, 0, 1);
-                        // var mtx = new float4x4(row1, row2, row3, row4);
-
                         var mtx = bone.localToWorldMatrix * bindPoses[k];
-                        // texData[boneIndex + 0 + baseIndex] = new half4(mtx.c0);
-                        // texData[boneIndex + 1 + baseIndex] = new half4(mtx.c1);
-                        // texData[boneIndex + 2 + baseIndex] = new half4(mtx.c2);
+
                         texData[baseIndex + boneIndex + 0] = new half4(mtx.GetRow(0));
                         texData[baseIndex + boneIndex + 1] = new half4(mtx.GetRow(1));
                         texData[baseIndex + boneIndex + 2] = new half4(mtx.GetRow(2));
