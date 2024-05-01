@@ -698,8 +698,32 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 2158312176692590316, guid: a1d56e943b8370c499dfa2e1d7098157,
+        type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 4688796231514684623}
   m_SourcePrefab: {fileID: 100100000, guid: a1d56e943b8370c499dfa2e1d7098157, type: 3}
+--- !u!1 &4688796231514684622 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 2158312176692590316, guid: a1d56e943b8370c499dfa2e1d7098157,
+    type: 3}
+  m_PrefabInstance: {fileID: 4688796231514684621}
+  m_PrefabAsset: {fileID: 0}
+--- !u!114 &4688796231514684623
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4688796231514684622}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8b45fc30d7f5b084da3b75aeb9c27813, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  bakedAnimationInfo: {fileID: 11400000, guid: e82e00ba5a83a2342b074bc37a369aa5, type: 2}
+  currentClipIndex: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

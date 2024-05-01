@@ -6,9 +6,9 @@ namespace AnimationBaker.Editor
 {
     public static class AnimationBakerUtil
     {
-        public static BakedAnimation BakeAnimation(GameObject root, SkinnedMeshRenderer skinnedMeshRenderer, AnimationClip[] animationClips)
+        public static BakedAnimationInfo BakeAnimation(GameObject root, SkinnedMeshRenderer skinnedMeshRenderer, AnimationClip[] animationClips)
         {
-            var bakedAnimation = new BakedAnimation();
+            var bakedAnimation = new BakedAnimationInfo();
             
             var bones = skinnedMeshRenderer.bones;
             var bindPoses = skinnedMeshRenderer.sharedMesh.bindposes;
@@ -19,29 +19,32 @@ namespace AnimationBaker.Editor
                 
             var textureWidth = bones.Length * 3;
             var textureHeight = 0;
-            bakedAnimation.infos = new BakedAnimation.ClipInfo[animationClips.Length];
+            bakedAnimation.clipInfos = new BakedAnimationInfo.ClipInfo[animationClips.Length];
 
             for (int i = 0; i < animationClips.Length; i++)
             {
                 var clip = animationClips[i];
+                var clipInfo = new BakedAnimationInfo.ClipInfo();
                 
-                bakedAnimation.infos[i].name = clip.name;
-                bakedAnimation.infos[i].row = textureHeight;
-                bakedAnimation.infos[i].count = Mathf.CeilToInt(clip.length * clip.frameRate);
+                clipInfo.name = clip.name;
+                clipInfo.row = textureHeight;
+                clipInfo.count = Mathf.CeilToInt(clip.length * clip.frameRate);
                 
-                textureHeight += bakedAnimation.infos[i].count;
+                bakedAnimation.clipInfos[i] = clipInfo;
+                textureHeight += clipInfo.count;
             }
+            
+            bakedAnimation.uvStep = new Vector2(1f / textureWidth, 1f / textureHeight);
             
             // Using 16bit float(RGBAHalf) for transform matrix
             bakedAnimation.texture = new Texture2D(textureWidth, textureHeight, TextureFormat.RGBAHalf, false, true);
-            //var texView = texture.GetPixelData<half4>(0);
             var texData = new NativeArray<half4>(textureWidth * textureHeight, Allocator.Temp);
 
             for (int i = 0; i < animationClips.Length; i++)
             {
-                for (int j = 0; j < bakedAnimation.infos[i].count; j++)
+                for (int j = 0; j < bakedAnimation.clipInfos[i].count; j++)
                 {
-                    var row = bakedAnimation.infos[i].row + j;
+                    var row = bakedAnimation.clipInfos[i].row + j;
                     var baseIndex = row * textureWidth;
                     
                     // Sample animation

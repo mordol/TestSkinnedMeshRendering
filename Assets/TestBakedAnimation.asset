@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 20709edcf47b54326b161cc92d2eb8f6, type: 3}
+  m_Name: TestBakedAnimation
+  m_EditorClassIdentifier: 
+  clipInfos:
+  - name: zombie_attack
+    row: 0
+    count: 106
+  - name: zombie_death_standing
+    row: 106
+    count: 101
+  - name: zombie_idle
+    row: 207
+    count: 181
+  - name: zombie_walk_backwards
+    row: 388
+    count: 101
+  - name: zombie_walk_forward
+    row: 489
+    count: 101
+  texture: {fileID: 2800000, guid: 16140cb669aa7be4b9f0b415db2d1295, type: 2}
+  uvStep: {x: 0.012345679, y: 0.0016949152}

@@ -231,17 +231,19 @@ namespace AnimationBaker.Editor
             // TODO: Bake animation with multiple SkinnedMeshRenderers
             var bakedAnimation = AnimationBakerUtil.BakeAnimation(characterRoot, skinnedMeshRenderers[0], animationClips);
             
-            Debug.Log($"Texture {bakedAnimation.texture.width} x {bakedAnimation.texture.height}");
-            foreach (var info in bakedAnimation.infos)
-            {
-                Debug.Log($"info: {info.name} row: {info.row} count: {info.count}");
-            }
-            
-            Debug.Log($"uvstep ({1f / (float)bakedAnimation.texture.width}, {1 / (float)bakedAnimation.texture.height})");
+            // Debug.Log($"Texture {bakedAnimation.texture.width} x {bakedAnimation.texture.height}");
+            // foreach (var info in bakedAnimation.clipInfos)
+            // {
+            //     Debug.Log($"info: {info.name} row: {info.row} count: {info.count}");
+            // }
+            //
+            // Debug.Log($"uvstep ({bakedAnimation.uvStep.ToString("F6")})");
             
             bakedTexture = bakedAnimation.texture;
             
             AssetDatabase.CreateAsset(bakedAnimation.texture, "Assets/TestBakedTexture.asset");
+            AssetDatabase.CreateAsset(bakedAnimation, "Assets/TestBakedAnimation.asset");
+            
             return true;
         }
     }
