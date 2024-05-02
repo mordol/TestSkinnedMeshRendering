@@ -437,11 +437,11 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 1750036454947828, guid: 2869f50f08793594889040a0ec4b691e, type: 3}
       propertyPath: m_Name
-      value: MobileFreeZombie (1)
+      value: MobileFreeZombie_Original
       objectReference: {fileID: 0}
     - target: {fileID: 4286830457523408, guid: 2869f50f08793594889040a0ec4b691e, type: 3}
       propertyPath: m_LocalPosition.x
-      value: -1
+      value: -2
       objectReference: {fileID: 0}
     - target: {fileID: 4286830457523408, guid: 2869f50f08793594889040a0ec4b691e, type: 3}
       propertyPath: m_LocalPosition.y
@@ -482,35 +482,8 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 1750036454947828, guid: 2869f50f08793594889040a0ec4b691e,
-        type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 1874332037}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 2869f50f08793594889040a0ec4b691e, type: 3}
---- !u!1 &1874332036 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 1750036454947828, guid: 2869f50f08793594889040a0ec4b691e,
-    type: 3}
-  m_PrefabInstance: {fileID: 1874332035}
-  m_PrefabAsset: {fileID: 0}
---- !u!111 &1874332037
-Animation:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1874332036}
-  m_Enabled: 1
-  serializedVersion: 3
-  m_Animation: {fileID: 4711207028766201714, guid: 31c1a2a498086974eaa9d10c7f42d24d,
-    type: 3}
-  m_Animations:
-  - {fileID: 4711207028766201714, guid: 31c1a2a498086974eaa9d10c7f42d24d, type: 3}
-  m_WrapMode: 0
-  m_PlayAutomatically: 1
-  m_AnimatePhysics: 0
-  m_CullingType: 0
 --- !u!1 &2133605224
 GameObject:
   m_ObjectHideFlags: 0
@@ -617,6 +590,74 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &289445216528679620
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 0}
+    m_Modifications:
+    - target: {fileID: 1279511415802592982, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_Name
+      value: BasicUnlit_Zombie
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalPosition.x
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 2764538772010589616, guid: 16b9f2fe914e4ac4e99db066ebbf8816,
+        type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 16b9f2fe914e4ac4e99db066ebbf8816, type: 3}
 --- !u!1001 &4688796231514684621
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -678,7 +719,7 @@ PrefabInstance:
     - target: {fileID: 2158312176692590316, guid: a1d56e943b8370c499dfa2e1d7098157,
         type: 3}
       propertyPath: m_Name
-      value: MobileFreeZombie
+      value: BasicBaked_Zombie
       objectReference: {fileID: 0}
     - target: {fileID: 2380977677511986859, guid: a1d56e943b8370c499dfa2e1d7098157,
         type: 3}
@@ -732,5 +773,6 @@ SceneRoots:
   - {fileID: 410087041}
   - {fileID: 832575519}
   - {fileID: 1874332035}
+  - {fileID: 289445216528679620}
   - {fileID: 4688796231514684621}
   - {fileID: 2133605228}

@@ -20,8 +20,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Zombie_Lower
-  m_Shader: {fileID: 4800000, guid: be32e6289929e294788ecf33601f0d02, type: 3}
+  m_Name: BasicUnlit_Zombie_Lower
+  m_Shader: {fileID: 4800000, guid: 5e69dd4058a5bec468daa9062b91b5e9, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
