@@ -17,12 +17,16 @@ public class GridSpawner : MonoBehaviour
         }
 
         var gridCount = Mathf.CeilToInt(Mathf.Sqrt(spawnCount));
-        var halfGridCount = gridCount / 2;
+        var halfGridCount = Mathf.CeilToInt(gridCount / 2f);
+        var spawnIndex = 0;
         
         for (int x = -halfGridCount; x < halfGridCount; x++)
         {
             for (int z = -halfGridCount; z < halfGridCount; z++)
             {
+                if (spawnIndex++ >= spawnCount)
+                    break;
+                
                 Vector3 spawnPosition = new Vector3(
                     x * gridSize,
                     0,

@@ -8,7 +8,6 @@ Shader "Unlit/InstancedBakedAniamtion"
         
         _AnimMap ("Baked animation", 2D) = "black"
         _UVStepForBone ("UV Step for bone", Vector) = (0, 0, 0, 0)
-        _Frame ("Animation frame", Float) = 0.0
     }
     SubShader
     {
@@ -26,10 +25,7 @@ Shader "Unlit/InstancedBakedAniamtion"
             #pragma fragment frag
 
             #pragma target 3.0
-
-            // For SRP Batcher
-            #pragma enable_cbuffer
-
+            
             // The Core.hlsl file contains definitions of frequently used HLSL
             // macros and functions, and also contains #include references to other
             // HLSL files (for example, Common.hlsl, SpaceTransforms.hlsl, etc.).
@@ -60,22 +56,27 @@ Shader "Unlit/InstancedBakedAniamtion"
                 // given vertex.
                 float2 uv           : TEXCOORD0;
             };
+
+            struct MeshProperties
+            {
+                float4x4 mat;
+                float frame;
+            };
+
+            StructuredBuffer<MeshProperties> _Properties;
             
             // This macro declares _BaseMap as a Texture2D object.
             TEXTURE2D(_BaseMap);
             // This macro declares the sampler for the _BaseMap texture.
             SAMPLER(sampler_BaseMap);
+            float4 _BaseMap_ST;
             
             TEXTURE2D(_AnimMap);
             SAMPLER(sampler_AnimMap);
+            float4 _AnimMap_ST;
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseMap_ST;
-                float4 _AnimMap_ST;
-                float _Frame;
-                float2 _UVStepForBone;
-            CBUFFER_END
-
+            float2 _UVStepForBone;
+            
             // Get skin matrix function
             half4x4 GetSkinMatrix(uint blendIndex, float frameIndex)
             {
@@ -94,16 +95,21 @@ Shader "Unlit/InstancedBakedAniamtion"
             // The vertex shader definition with properties defined in the Varyings 
             // structure. The type of the vert function must match the type (struct)
             // that it returns.
-            Varyings vert(Attributes IN)
+            Varyings vert(Attributes IN, uint instanceID: SV_InstanceID)
             {
+                float frame = _Properties[instanceID].frame;
+                
                 // Calc skin matrix for 4 weight
                 half4x4 skinMatrix;
-                skinMatrix = GetSkinMatrix(IN.blendIndices.x, _Frame) * IN.blendWeights.x;
-                skinMatrix += GetSkinMatrix(IN.blendIndices.y, _Frame) * IN.blendWeights.y;
-                skinMatrix += GetSkinMatrix(IN.blendIndices.z, _Frame) * IN.blendWeights.z;
-                skinMatrix += GetSkinMatrix(IN.blendIndices.w, _Frame) * IN.blendWeights.w;
+                skinMatrix = GetSkinMatrix(IN.blendIndices.x, frame) * IN.blendWeights.x;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.y, frame) * IN.blendWeights.y;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.z, frame) * IN.blendWeights.z;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.w, frame) * IN.blendWeights.w;
                 
                 float4 position = mul(skinMatrix, IN.positionOS);
+
+                // Apply instance transform
+                position = mul(_Properties[instanceID].mat, position);
                 
                 // Declaring the output object (OUT) with the Varyings struct.
                 Varyings OUT;
