@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using AnimationBaker;
 using UnityEngine;
 
 public class GridSpawner : MonoBehaviour
@@ -27,13 +28,31 @@ public class GridSpawner : MonoBehaviour
                 if (spawnIndex++ >= spawnCount)
                     break;
                 
-                Vector3 spawnPosition = new Vector3(
-                    x * gridSize,
-                    0,
-                    z * gridSize
-                );
+                Vector3 spawnPosition = new Vector3(x * gridSize, 0, z * gridSize);
                 
-                Instantiate(spawnPrefab, spawnPosition, Quaternion.identity);
+                var instance = Instantiate(spawnPrefab, spawnPosition, Quaternion.identity);
+                var animControl = instance.GetComponent<BakedAnimationControl>();
+                if (animControl != null)
+                {
+                    animControl.PlayAnimation(
+                        Random.Range(0, animControl.bakedAnimationInfo.clipInfos.Length));
+                }
+                else
+                {
+                    var animation = instance.GetComponent<Animation>();
+                    if (animation != null)
+                    {
+                        var clipIndex = Random.Range(0, animation.GetClipCount());
+                        foreach (AnimationState state in animation)
+                        {
+                            if (clipIndex-- == 0)
+                            {
+                                animation.Play(state.name);
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }

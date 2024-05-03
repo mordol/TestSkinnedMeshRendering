@@ -284,7 +284,10 @@ MonoBehaviour:
     type: 3}
   spawnCount: 1000
   gridSize: 0.4
+  bakedAnimationInfo: {fileID: 11400000, guid: e82e00ba5a83a2342b074bc37a369aa5, type: 2}
   meshInfos: []
+  animationFrameCompute: {fileID: 7200000, guid: c634fdbf4c14a5344b3b82d5a92c3871,
+    type: 3}
 --- !u!1 &1944883657
 GameObject:
   m_ObjectHideFlags: 0

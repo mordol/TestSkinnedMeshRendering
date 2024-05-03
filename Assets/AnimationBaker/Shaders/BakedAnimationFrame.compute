@@ -1,0 +1,30 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AnimationFrame
+
+struct MeshProperties
+{
+    float4x4 mat;
+    float frame;
+};
+
+RWStructuredBuffer<MeshProperties> _Properties;
+
+struct ClipInfo
+{
+    float row;
+    float count;
+    float frameStep;
+};
+
+StructuredBuffer<ClipInfo> _ClipInfo;
+
+float _TimeDelta;
+
+[numthreads(64,1,1)]
+void AnimationFrame (uint3 id : SV_DispatchThreadID)
+{
+    float frame = _Properties[id.x].frame + _ClipInfo[id.x].frameStep * _TimeDelta;
+    frame = frame - _ClipInfo[id.x].row;
+    frame = frame % _ClipInfo[id.x].count;
+    _Properties[id.x].frame = frame + _ClipInfo[id.x].row;
+}

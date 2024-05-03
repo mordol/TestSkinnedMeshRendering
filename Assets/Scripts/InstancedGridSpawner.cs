@@ -7,6 +7,7 @@ public class InstancedGridSpawner : MonoBehaviour
     public GameObject spawnPrefab;
     public int spawnCount = 1000;
     public float gridSize = 0.5f;
+    public AnimationBaker.BakedAnimationInfo bakedAnimationInfo;
 
     [System.Serializable]
     public struct MeshInfoForInstancing
@@ -26,12 +27,33 @@ public class InstancedGridSpawner : MonoBehaviour
         public Matrix4x4 mat;
         public float frame;
 
-        public static int Size() {
+        public static int Size()
+        {
             return
                 sizeof(float) * 4 * 4 + // matrix;
                 sizeof(float) * 1;      // frame;
         }
     }
+    
+    // For animation frame calculation
+    struct ClipInfo
+    {
+        public float row;
+        public float count;
+        public float frameStep;
+        
+        public static int Size()
+        {
+            return
+                sizeof(float) * 3; // row, count, frameStep
+        }
+    };
+    
+    public ComputeShader animationFrameCompute;
+    ComputeBuffer animationClipInfoBuffer;
+
+    // The current animation clip index of the instance
+    int[] currentClipIndices;
     
     // Start is called before the first frame update
     void Start()
@@ -51,11 +73,21 @@ public class InstancedGridSpawner : MonoBehaviour
             meshInfos[i].materials = meshRenderers[i].sharedMaterials;
         }
         
+        currentClipIndices = new int[spawnCount];
+        for (int i = 0; i < spawnCount; i++)
+        {
+            currentClipIndices[i] = Random.Range(0, bakedAnimationInfo.clipInfos.Length);
+        }
+        
         Initialize();
     }
     
     private void Update()
     {
+        var kernel = animationFrameCompute.FindKernel("AnimationFrame");
+        animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
+        animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
+        
         for (int i = 0; i < meshInfos.Length; i++)
         {
             var meshInfo = meshInfos[i];
@@ -95,7 +127,7 @@ public class InstancedGridSpawner : MonoBehaviour
                 Vector3 scale = Vector3.one;
 
                 props.mat = Matrix4x4.TRS(position, rotation, scale);
-                props.frame = 0f;
+                props.frame = bakedAnimationInfo.clipInfos[currentClipIndices[spawnIndex]].row;
                 properties[spawnIndex++] = props;
             }
         }
@@ -129,8 +161,29 @@ public class InstancedGridSpawner : MonoBehaviour
                     (uint)mesh.GetBaseVertex(j),
                     0
                 });
+                
+                materials[j].SetTexture("_AnimMap", bakedAnimationInfo.texture);
+                materials[j].SetVector("_UVStepForBone", new Vector4(bakedAnimationInfo.uvStep.x, bakedAnimationInfo.uvStep.y, 0, 0));
             }
         }
+        
+        // For animation frame calculation
+        var kernel = animationFrameCompute.FindKernel("AnimationFrame");
+        animationFrameCompute.SetBuffer(kernel, "_Properties", meshPropertiesBuffer);
+        
+        ClipInfo[] clipInfos = new ClipInfo[spawnCount];
+
+        for (int i = 0; i < spawnCount; i++)
+        {
+            var clipInfo = bakedAnimationInfo.clipInfos[currentClipIndices[i]];
+            clipInfos[i].row = clipInfo.row;
+            clipInfos[i].count = clipInfo.count;
+            clipInfos[i].frameStep = 60f;
+        }
+        
+        animationClipInfoBuffer = new ComputeBuffer(spawnCount, ClipInfo.Size());
+        animationClipInfoBuffer.SetData(clipInfos);
+        animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
     }
     
     private void OnDisable()
@@ -154,6 +207,12 @@ public class InstancedGridSpawner : MonoBehaviour
                     meshInfos[i].argsBuffers[j] = null;
                 }
             }
+        }
+        
+        if (animationClipInfoBuffer != null)
+        {
+            animationClipInfoBuffer.Release();
+            animationClipInfoBuffer = null;
         }
     }
 }
