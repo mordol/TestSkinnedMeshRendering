@@ -195,7 +195,6 @@ public class TestBRG : MonoBehaviour
         // kBytesPerInstance = (kSizeOfPackedMatrix * 2) + kSizeOfFloat4; (obj2world, world2obj, color)
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer-ctor.html
            // public GraphicsBuffer(GraphicsBuffer.Target target, int count, int stride);
-           // float도 4byte일껀데 float으로 계산해도 동일할껀데..
         m_InstanceData = new GraphicsBuffer(GraphicsBuffer.Target.Raw,
             BufferCountForInstances(kBytesPerInstance, kNumInstances, kExtraBytes),
             sizeof(int)); // 112, 3,128, 4?
@@ -203,7 +202,6 @@ public class TestBRG : MonoBehaviour
 
     // Raw buffers are allocated in ints. This is a utility method that calculates
     // the required number of ints for the data.
-    // bytesPerInstance나 extraBytes 값에 따라서 count가 정수로 안떨어질 수 있기 때문에 round(버림)처리를 한다.
     int BufferCountForInstances(int bytesPerInstance, int numInstances, int extraBytes = 0)
     {
         // Round byte counts to int multiples
@@ -253,8 +251,7 @@ public class TestBRG : MonoBehaviour
             new Vector4(0, 1, 0, 1),
             new Vector4(0, 0, 1, 1),
         };
-
-        // GraphicBuffer에 접근할 주소 계산
+        
         // In this simple example, the instance data is placed into the buffer like this:
         // Offset | Description
         //      0 | 64 bytes of zeroes, so loads from address 0 return zeroes (float4x4 matrix 64byte)
@@ -268,30 +265,22 @@ public class TestBRG : MonoBehaviour
         uint byteAddressObjectToWorld = kSizeOfPackedMatrix * 2;
         uint byteAddressWorldToObject = byteAddressObjectToWorld + kSizeOfPackedMatrix * kNumInstances;
         uint byteAddressColor = byteAddressWorldToObject + kSizeOfPackedMatrix * kNumInstances;
-
-        // 드디어 GraphicBuffer에 instance data upload
+        
         // Upload the instance data to the GraphicsBuffer so the shader can load them.
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer.SetData.html
         // public void SetData(Array data, int managedBufferStartIndex, int graphicsBufferStartIndex, int count);
            // graphicsBufferStartIndex: The first element index in the graphics buffer to receive the data.
         m_InstanceData.SetData(zero, 0, 0, 1);
-           // graphicsBufferStartIndex는 byte가 아니고 입력 배열 요소의 크기 단위로 index를 넣어야함. 즉, objectToWorld의 byte index는 96이지만, packedmatrix 크기 48byte 단위로 보면 index가 2가됨.
         m_InstanceData.SetData(objectToWorld, 0, (int)(byteAddressObjectToWorld / kSizeOfPackedMatrix), objectToWorld.Length); // 96 / 48 = 2
         m_InstanceData.SetData(worldToObject, 0, (int)(byteAddressWorldToObject / kSizeOfPackedMatrix), worldToObject.Length); // 240 / 48 = 5
         m_InstanceData.SetData(colors, 0, (int)(byteAddressColor / kSizeOfFloat4), colors.Length); // 384 / 16 = 24
-
-        // 드디어 metadata 생성
+        
         // Set up metadata values to point to the instance data. Set the most significant bit 0x80000000 in each
         // which instructs the shader that the data is an array with one value per instance, indexed by the instance index.
         // Any metadata values that the shader uses that are not set here will be 0. When a value of 0 is used with
         // UNITY_ACCESS_DOTS_INSTANCED_PROP (i.e. without a default), the shader interprets the
         // 0x00000000 metadata value and loads from the start of the buffer. The start of the buffer is
         // a zero matrix so this sort of load is guaranteed to return zero, which is a reasonable default value.
-/* 인스턴스 데이터를 가리키도록 메타데이터 값을 설정합니다. 각각에 가장 중요한 비트 0x80000000을 설정하여 셰이더에 데이터가 인스턴스당 하나의 값을 가진 배열이며 인스턴스 인덱스에 의해 인덱싱된다는 것을 알려줍니다.
-셰이더가 사용하는 메타데이터 값 중 여기에 설정되지 않은 값은 모두 0이 됩니다. 
-기본값이 없는 경우(즉, 기본값이 없는 경우) UNITY_ACCESS_DOTS_INSTANCED_PROP에 0 값을 사용하면 셰이더는 0x00000000 메타데이터 값을 해석하고 버퍼의 시작부터 로드합니다. 
-버퍼의 시작은 0 행렬이므로 이러한 종류의 로드는 합리적인 기본값인 0을 반환하도록 보장됩니다. */
-        
         var metadata = new NativeArray<MetadataValue>(3, Allocator.Temp);
         metadata[0] = new MetadataValue
         {
@@ -308,8 +297,7 @@ public class TestBRG : MonoBehaviour
             NameID = Shader.PropertyToID("_BaseColor"), 
             Value = 0x80000000 | byteAddressColor,
         };
-
-        // Batch 생성
+        
         // Finally, create a batch for the instances and make the batch use the GraphicsBuffer with the
         // instance data as well as the metadata values that specify where the properties are.
         m_BatchID = m_BRG.AddBatch(metadata, m_InstanceData.bufferHandle);
@@ -332,8 +320,7 @@ public class TestBRG : MonoBehaviour
             animationClipInfoBuffer = null;
         }
     }
-
-    // OnPerformCulling 구현, BRG의 main entry point, Culling할 때마다 호출
+    
     public unsafe JobHandle OnPerformCulling(
         BatchRendererGroup rendererGroup,
         BatchCullingContext cullingContext,
@@ -343,11 +330,6 @@ public class TestBRG : MonoBehaviour
         var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
         animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
         animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(3 / 64f), 1, 1);
-        
-        // BatchCullingContext을 기반으로 가시성 culling 해야하고
-        // 실제 draw command를 생성하도록 BatchCullingOutput을 설정해야 함
-
-        // 여기서 수정된 mesh, material은 rendering에 반영되지만, job scheduled된 변형은 반영안되고 동작 이상해짐.
         
         // UnsafeUtility.Malloc() requires an alignment, so use the largest integer type's alignment
         // which is a reasonable default.

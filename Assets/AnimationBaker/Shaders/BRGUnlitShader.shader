@@ -33,7 +33,6 @@ Shader "Unlit/BRGUnlitShader"
             //#pragma exclude_renderers gles gles3 glcore
             //#pragma multi_compile_instancing
             #pragma multi_compile _ DOTS_INSTANCING_ON
-            //#pragma multi_compile DOTS_INSTANCING_ON
             //#pragma instancing_options renderinglayer
 
             // For SRP Batcher
@@ -149,7 +148,6 @@ Shader "Unlit/BRGUnlitShader"
                 // The TransformObjectToHClip function transforms vertex positions
                 // from object space to homogenous clip space.
                 OUT.positionHCS = TransformObjectToHClip(position.xyz);
-                //OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
                 
                 // The TRANSFORM_TEX macro performs the tiling and offset
                 // transformation.
@@ -166,7 +164,8 @@ Shader "Unlit/BRGUnlitShader"
                 // The SAMPLE_TEXTURE2D marco samples the texture with the given
                 // sampler.
                 half4 color = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv);
-                return color * _BaseColor;
+                //return color * _BaseColor;
+                return color;
             }
             ENDHLSL
         }
