@@ -7,6 +7,7 @@ namespace AnimationBaker
     {
         public BakedAnimationInfo bakedAnimationInfo;
         public int currentClipIndex;
+        public bool autoPlay = false;
 
         int m_FrameID;
         BakedAnimationInfo.ClipInfo m_CurrentClipInfo;
@@ -34,7 +35,10 @@ namespace AnimationBaker
         // Start is called before the first frame update
         void Start()
         {
-            PlayAnimation(currentClipIndex);
+            if (autoPlay)
+            {
+                PlayAnimation(currentClipIndex);
+            }
         }
 
         // Update is called once per frame
@@ -62,7 +66,7 @@ namespace AnimationBaker
             m_ElapsedTime += Time.deltaTime;
         }
         
-        public bool PlayAnimation(int clipIndex)
+        public bool PlayAnimation(int clipIndex, float startTime = 0)
         {
             if (bakedAnimationInfo == null)
                 return false;
@@ -72,7 +76,7 @@ namespace AnimationBaker
 
             currentClipIndex = clipIndex;
             m_CurrentClipInfo = bakedAnimationInfo.clipInfos[currentClipIndex];
-            m_ElapsedTime = 0;
+            m_ElapsedTime = startTime;
             return true;
         }
     }

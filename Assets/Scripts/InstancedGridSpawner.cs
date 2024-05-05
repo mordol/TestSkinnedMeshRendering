@@ -84,6 +84,9 @@ public class InstancedGridSpawner : MonoBehaviour
     
     private void Update()
     {
+        if (meshInfos == null || meshInfos.Length <= 0)
+            return;
+        
         var kernel = animationFrameCompute.FindKernel("AnimationFrame");
         animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
         animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
@@ -127,7 +130,7 @@ public class InstancedGridSpawner : MonoBehaviour
                 Vector3 scale = Vector3.one;
 
                 props.mat = Matrix4x4.TRS(position, rotation, scale);
-                props.frame = bakedAnimationInfo.clipInfos[currentClipIndices[spawnIndex]].row;
+                props.frame = bakedAnimationInfo.clipInfos[currentClipIndices[spawnIndex]].GetRandomFrame();
                 properties[spawnIndex++] = props;
             }
         }

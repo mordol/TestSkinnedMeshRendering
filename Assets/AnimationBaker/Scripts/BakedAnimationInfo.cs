@@ -11,6 +11,11 @@ namespace AnimationBaker
             public string name;
             public int row;         // first row index in the texture
             public int count;
+            
+            public int GetRandomFrame()
+            {
+                return Random.Range(0, count) + row;
+            }
         }
             
         public ClipInfo[] clipInfos;

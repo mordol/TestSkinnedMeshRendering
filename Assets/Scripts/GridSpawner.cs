@@ -34,8 +34,9 @@ public class GridSpawner : MonoBehaviour
                 var animControl = instance.GetComponent<BakedAnimationControl>();
                 if (animControl != null)
                 {
-                    animControl.PlayAnimation(
-                        Random.Range(0, animControl.bakedAnimationInfo.clipInfos.Length));
+                    var clipIndex = Random.Range(0, animControl.bakedAnimationInfo.clipInfos.Length);
+                    var clipInfo = animControl.bakedAnimationInfo.clipInfos[clipIndex];
+                    animControl.PlayAnimation(clipIndex, Random.Range(0f, clipInfo.count / 60f));
                 }
                 else
                 {
@@ -48,6 +49,8 @@ public class GridSpawner : MonoBehaviour
                             if (clipIndex-- == 0)
                             {
                                 animation.Play(state.name);
+                                state.wrapMode = WrapMode.Loop;
+                                state.time = Random.Range(0f, state.length);
                                 break;
                             }
                         }

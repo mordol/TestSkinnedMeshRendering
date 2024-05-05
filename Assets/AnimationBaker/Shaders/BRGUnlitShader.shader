@@ -164,8 +164,7 @@ Shader "Unlit/BRGUnlitShader"
                 // The SAMPLE_TEXTURE2D marco samples the texture with the given
                 // sampler.
                 half4 color = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv);
-                //return color * _BaseColor;
-                return color;
+                return color * _BaseColor;
             }
             ENDHLSL
         }

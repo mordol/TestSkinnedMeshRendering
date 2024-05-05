@@ -70,7 +70,6 @@ public class TestBRG : MonoBehaviour
     private const int kSizeOfFloat4 = sizeof(float) * 4;		// 16
     private const int kBytesPerInstance = (kSizeOfPackedMatrix * 2) + kSizeOfFloat4;	// 96 + 16 = 112
     private const int kExtraBytes = kSizeOfMatrix * 2;		// 128
-    private const int kNumInstances = 3;
 
     // The PackedMatrix is a convenience type that converts matrices into
     // the format that Unity-provided SRP shaders expect.
@@ -106,7 +105,7 @@ public class TestBRG : MonoBehaviour
         }
     }
 
-    private void Start()
+    void Start()
     {
         if (spawnPrefab == null || spawnCount <= 0)
             return;
@@ -159,9 +158,8 @@ public class TestBRG : MonoBehaviour
 
     void InitializeComputeBuffer()
     {
-        var clipCount = bakedAnimationInfo.clipInfos.Length;
-        ClipInfo[] clipInfos = new ClipInfo[clipCount];
-        for (int i = 0; i < clipCount; i++)
+        ClipInfo[] clipInfos = new ClipInfo[bakedAnimationInfo.clipInfos.Length];
+        for (int i = 0; i < clipInfos.Length; i++)
         {
             var clipInfo = bakedAnimationInfo.clipInfos[i];
             clipInfos[i].row = clipInfo.row;
@@ -169,25 +167,24 @@ public class TestBRG : MonoBehaviour
             clipInfos[i].frameStep = 60f;
         }
         
-        AnimationProperties[] properties = new AnimationProperties[3];
-        for (int i = 0; i < 3; i++)
+        AnimationProperties[] properties = new AnimationProperties[spawnCount];
+        for (int i = 0; i < spawnCount; i++)
         {
-            var clipIndex = UnityEngine.Random.Range(0, bakedAnimationInfo.clipInfos.Length);
+            var clipIndex = UnityEngine.Random.Range(0, clipInfos.Length);
             properties[i].clipIndex = clipIndex; 
-            properties[i].frame = bakedAnimationInfo.clipInfos[clipIndex].row;
+            properties[i].frame = bakedAnimationInfo.clipInfos[clipIndex].GetRandomFrame();
         }
         
-        animationPropertiesBuffer = new ComputeBuffer(3, AnimationProperties.Size());
+        animationPropertiesBuffer = new ComputeBuffer(spawnCount, AnimationProperties.Size());
         animationPropertiesBuffer.SetData(properties);
 
-        animationClipInfoBuffer = new ComputeBuffer(clipCount, ClipInfo.Size());
+        animationClipInfoBuffer = new ComputeBuffer(clipInfos.Length, ClipInfo.Size());
         animationClipInfoBuffer.SetData(clipInfos);
         
         // For animation frame calculation
         var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
         animationFrameCompute.SetBuffer(kernel, "_Properties", animationPropertiesBuffer);
         animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
-        animationFrameCompute.SetInt("_ClipCount", clipCount);
     }
 
     void AllocateInstanceDateBuffer()
@@ -196,7 +193,7 @@ public class TestBRG : MonoBehaviour
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer-ctor.html
            // public GraphicsBuffer(GraphicsBuffer.Target target, int count, int stride);
         m_InstanceData = new GraphicsBuffer(GraphicsBuffer.Target.Raw,
-            BufferCountForInstances(kBytesPerInstance, kNumInstances, kExtraBytes),
+            BufferCountForInstances(kBytesPerInstance, spawnCount, kExtraBytes),
             sizeof(int)); // 112, 3,128, 4?
     }
 
@@ -215,56 +212,54 @@ public class TestBRG : MonoBehaviour
            // 464 / 4 = 116
     }
 
-    private void PopulateInstanceDataBuffer()
+    void PopulateInstanceDataBuffer()
     {
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
         var zero = new Matrix4x4[1] { Matrix4x4.zero };
+        
+        var gridCount = Mathf.CeilToInt(Mathf.Sqrt(spawnCount));
+        var halfGridCount = Mathf.CeilToInt(gridCount / 2f);
+        var spawnIndex = 0;
 
-        // Create transform matrices for three example instances.
-        var matrices = new Matrix4x4[kNumInstances]
+        //var matrices = new Matrix4x4[spawnCount];
+        var objectToWorld = new PackedMatrix[spawnCount];
+        var worldToObject = new PackedMatrix[spawnCount];
+        var colors = new Vector4[spawnCount];
+        
+        for (int x = -halfGridCount; x < halfGridCount; x++)
         {
-            Matrix4x4.Translate(new Vector3(-2, 0, 0)),
-            Matrix4x4.Translate(new Vector3(0, 0, 0)),
-            Matrix4x4.Translate(new Vector3(2, 0, 0)),
-        };
-
-        // Convert the transform matrices into the packed format that the shader expects.
-        var objectToWorld = new PackedMatrix[kNumInstances]
-        {
-            new PackedMatrix(matrices[0]),
-            new PackedMatrix(matrices[1]),
-            new PackedMatrix(matrices[2]),
-        };
-
-        // Also create packed inverse matrices.
-        var worldToObject = new PackedMatrix[kNumInstances]
-        {
-            new PackedMatrix(matrices[0].inverse),
-            new PackedMatrix(matrices[1].inverse),
-            new PackedMatrix(matrices[2].inverse),
-        };
-
-        // Make all instances have unique colors.
-        var colors = new Vector4[kNumInstances]
-        {
-            new Vector4(1, 0, 0, 1),
-            new Vector4(0, 1, 0, 1),
-            new Vector4(0, 0, 1, 1),
-        };
+            for (int z = -halfGridCount; z < halfGridCount; z++)
+            {
+                if (spawnIndex >= spawnCount)
+                    break;
+                
+                Vector3 position = new Vector3(x * gridSize, 0, z * gridSize);
+                Quaternion rotation = Quaternion.identity;
+                Vector3 scale = Vector3.one;
+                var matrix = Matrix4x4.TRS(position, rotation, scale);
+                
+                // Convert the transform matrices into the packed format that the shader expects.
+                objectToWorld[spawnIndex] = new PackedMatrix(matrix);
+                // Also create packed inverse matrices.
+                worldToObject[spawnIndex] = new PackedMatrix(matrix.inverse);
+                colors[spawnIndex] = new Vector4(UnityEngine.Random.value, UnityEngine.Random.value, UnityEngine.Random.value, 1);
+                spawnIndex++;
+            }
+        }
         
         // In this simple example, the instance data is placed into the buffer like this:
         // Offset | Description
         //      0 | 64 bytes of zeroes, so loads from address 0 return zeroes (float4x4 matrix 64byte)
         //     64 | 32 uninitialized bytes to make working with SetData easier, otherwise unnecessary
-        //     96 | unity_ObjectToWorld, three packed float3x4 matrices (48byte * 3개 = 144byte)
+        //     96 | unity_ObjectToWorld, three packed float3x4 matrices (48byte * 3 = 144byte)
         //    240 | unity_WorldToObject, three packed float3x4 matrices
         //    384 | _BaseColor, three float4s (16byte)
         // Calculates start addresses for the different instanced properties. unity_ObjectToWorld starts
         // at address 96 instead of 64, because the computeBufferStartIndex parameter of SetData
         // is expressed as source array elements, so it is easier to work in multiples of sizeof(PackedMatrix).
         uint byteAddressObjectToWorld = kSizeOfPackedMatrix * 2;
-        uint byteAddressWorldToObject = byteAddressObjectToWorld + kSizeOfPackedMatrix * kNumInstances;
-        uint byteAddressColor = byteAddressWorldToObject + kSizeOfPackedMatrix * kNumInstances;
+        uint byteAddressWorldToObject = byteAddressObjectToWorld + kSizeOfPackedMatrix * (uint)spawnCount;
+        uint byteAddressColor = byteAddressWorldToObject + kSizeOfPackedMatrix * (uint)spawnCount;
         
         // Upload the instance data to the GraphicsBuffer so the shader can load them.
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer.SetData.html
@@ -303,7 +298,7 @@ public class TestBRG : MonoBehaviour
         m_BatchID = m_BRG.AddBatch(metadata, m_InstanceData.bufferHandle);
     }
 
-    private void OnDisable()
+    void OnDisable()
     {
         m_BRG.Dispose();
         m_InstanceData.Dispose();
@@ -320,17 +315,23 @@ public class TestBRG : MonoBehaviour
             animationClipInfoBuffer = null;
         }
     }
-    
-    public unsafe JobHandle OnPerformCulling(
+
+    void Update()
+    {
+        if (meshInfos == null || meshInfos.Length <= 0)
+            return;
+        
+        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
+        animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
+        animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(spawnCount / 64f), 1, 1);   
+    }
+
+    unsafe JobHandle OnPerformCulling(
         BatchRendererGroup rendererGroup,
         BatchCullingContext cullingContext,
         BatchCullingOutput cullingOutput,
         IntPtr userContext)
     {
-        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
-        animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
-        animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(3 / 64f), 1, 1);
-        
         // UnsafeUtility.Malloc() requires an alignment, so use the largest integer type's alignment
         // which is a reasonable default.
         int alignment = UnsafeUtility.AlignOf<long>();
@@ -349,12 +350,12 @@ public class TestBRG : MonoBehaviour
         // You must always allocate the arrays using Allocator.TempJob.
         drawCommands->drawCommands = (BatchDrawCommand*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawCommand>() * drawCommnadsCount, alignment, Allocator.TempJob);
         drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
-        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(kNumInstances * sizeof(int), alignment, Allocator.TempJob);
+        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(spawnCount * sizeof(int), alignment, Allocator.TempJob);
 
         drawCommands->drawCommandPickingInstanceIDs = null;
         drawCommands->drawCommandCount = drawCommnadsCount;
         drawCommands->drawRangeCount = 1;
-        drawCommands->visibleInstanceCount = kNumInstances;
+        drawCommands->visibleInstanceCount = spawnCount;
 
         // This example doens't use depth sorting, so it leaves instanceSortingPositions as null.
         drawCommands->instanceSortingPositions = null;
@@ -377,7 +378,7 @@ public class TestBRG : MonoBehaviour
                 // starting from offset 0 in the array, using the batch, material and mesh
                 // IDs registered in the Start() method. It doesn't set any special flags.
                 drawCommands->drawCommands[drawCommandIndex].visibleOffset = 0;
-                drawCommands->drawCommands[drawCommandIndex].visibleCount = kNumInstances;
+                drawCommands->drawCommands[drawCommandIndex].visibleCount = (uint)spawnCount;
                 drawCommands->drawCommands[drawCommandIndex].batchID = m_BatchID;
                 drawCommands->drawCommands[drawCommandIndex].materialID = meshInfos[i].materialIDs[j];
                 drawCommands->drawCommands[drawCommandIndex].meshID = meshInfos[i].meshID;
@@ -402,7 +403,7 @@ public class TestBRG : MonoBehaviour
         // Finally, write the actual visible instance indices to the array. In a more complicated
         // implementation, this output would depend on what is visible, but this example
         // assumes that everything is visible.
-        for (int i = 0; i < kNumInstances; ++i)
+        for (int i = 0; i < spawnCount; ++i)
             drawCommands->visibleInstances[i] = i;
         
         // This example doesn't use jobs, so it can return an empty JobHandle.
