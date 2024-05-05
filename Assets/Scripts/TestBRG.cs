@@ -159,30 +159,35 @@ public class TestBRG : MonoBehaviour
 
     void InitializeComputeBuffer()
     {
-        ClipInfo[] clipInfos = new ClipInfo[3];
+        var clipCount = bakedAnimationInfo.clipInfos.Length;
+        ClipInfo[] clipInfos = new ClipInfo[clipCount];
+        for (int i = 0; i < clipCount; i++)
+        {
+            var clipInfo = bakedAnimationInfo.clipInfos[i];
+            clipInfos[i].row = clipInfo.row;
+            clipInfos[i].count = clipInfo.count;
+            clipInfos[i].frameStep = 60f;
+        }
+        
         AnimationProperties[] properties = new AnimationProperties[3];
         for (int i = 0; i < 3; i++)
         {
             var clipIndex = UnityEngine.Random.Range(0, bakedAnimationInfo.clipInfos.Length);
             properties[i].clipIndex = clipIndex; 
             properties[i].frame = bakedAnimationInfo.clipInfos[clipIndex].row;
-            
-            var clipInfo = bakedAnimationInfo.clipInfos[clipIndex];
-            clipInfos[i].row = clipInfo.row;
-            clipInfos[i].count = clipInfo.count;
-            clipInfos[i].frameStep = 60f;
         }
         
         animationPropertiesBuffer = new ComputeBuffer(3, AnimationProperties.Size());
         animationPropertiesBuffer.SetData(properties);
 
-        animationClipInfoBuffer = new ComputeBuffer(3, ClipInfo.Size());
+        animationClipInfoBuffer = new ComputeBuffer(clipCount, ClipInfo.Size());
         animationClipInfoBuffer.SetData(clipInfos);
         
         // For animation frame calculation
         var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
         animationFrameCompute.SetBuffer(kernel, "_Properties", animationPropertiesBuffer);
         animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
+        animationFrameCompute.SetInt("_ClipCount", clipCount);
     }
 
     void AllocateInstanceDateBuffer()

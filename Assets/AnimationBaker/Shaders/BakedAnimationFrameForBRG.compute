@@ -19,12 +19,14 @@ struct ClipInfo
 StructuredBuffer<ClipInfo> _ClipInfo;
 
 float _TimeDelta;
+int _ClipCount;
 
 [numthreads(64,1,1)]
 void AnimationFrameForBRG (uint3 id : SV_DispatchThreadID)
 {
-    float frame = _Properties[id.x].frame + _ClipInfo[id.x].frameStep * _TimeDelta;
-    frame = frame - _ClipInfo[id.x].row;
-    frame = frame % _ClipInfo[id.x].count;
-    _Properties[id.x].frame = frame + _ClipInfo[id.x].row;
+    int clipIndex = (int)_Properties[id.x].clipIndex % _ClipCount;
+    float frame = _Properties[id.x].frame + _ClipInfo[clipIndex].frameStep * _TimeDelta;
+    frame = frame - _ClipInfo[clipIndex].row;
+    frame = frame % _ClipInfo[clipIndex].count;
+    _Properties[id.x].frame = frame + _ClipInfo[clipIndex].row;
 }
