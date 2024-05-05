@@ -56,7 +56,7 @@ MonoBehaviour:
   m_URPShaderStrippingSetting:
     m_Version: 0
     m_StripUnusedPostProcessingVariants: 1
-    m_StripUnusedVariants: 1
+    m_StripUnusedVariants: 0
     m_StripScreenCoordOverrideVariants: 1
   m_ShaderVariantLogLevel: 0
   m_ExportShaderVariants: 1
