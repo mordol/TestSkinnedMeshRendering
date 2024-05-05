@@ -17,13 +17,46 @@ public class TestBRG : MonoBehaviour
     {
         public Mesh mesh;
         public Material[] materials;
-    
-        // BRG에 종속이라 직렬화하면 안됨. 장면이 바껴 강제로 asset이 나라가면 id도 무효해짐
+        
         public BatchMeshID meshID;
         public BatchMaterialID[] materialIDs;
     }
     
     public MeshInfoForInstancing[] meshInfos;
+    
+    // For animation frame calculation with compute shader
+    struct AnimationProperties
+    {
+        public float clipIndex;
+        public float frame;
+
+        public static int Size()
+        {
+            return
+                sizeof(float) * 1 +     // clipIndex;
+                sizeof(float) * 1;      // frame;
+        }
+    }
+    
+    struct ClipInfo
+    {
+        public float row;
+        public float count;
+        public float frameStep;
+        
+        public static int Size()
+        {
+            return
+                sizeof(float) * 3; // row, count, frameStep
+        }
+    }
+    
+    public ComputeShader animationFrameCompute;
+    ComputeBuffer animationPropertiesBuffer;
+    ComputeBuffer animationClipInfoBuffer;
+    
+    
+    // For BRG
     
     private BatchRendererGroup m_BRG;
     int drawCommnadsCount = 0;
@@ -90,7 +123,9 @@ public class TestBRG : MonoBehaviour
             meshInfos[i].materials = meshRenderers[i].sharedMaterials;
         }
         
-        // instance 생성
+        InitializeComputeBuffer();
+        
+        // Create BRG instance
         m_BRG = new BatchRendererGroup(this.OnPerformCulling, IntPtr.Zero);
         
         drawCommnadsCount = 0;
@@ -103,17 +138,16 @@ public class TestBRG : MonoBehaviour
             var materials = meshInfos[i].materials;
             if (materials == null || materials.Length <= 0)
                 continue;
-
-            // Mesh, material은 managed C# 객체라 Burst C#에서 못씀. 그래서 BRG에서 사용하려면 등록해야 함.
-            // BRG가 rendering에 사용되기 전이라면, Runtime에서도 추가할 수 있음
-            // 필요없으면 unregist 해야함. 특히, unload하려면 꼭.
-            // 내부적으로 참조횟수 관리, 참조 0되면 진짜 등록해제, 동일 asset은 동일 ID 반환.
             
             meshInfos[i].meshID = m_BRG.RegisterMesh(mesh);
             meshInfos[i].materialIDs = new BatchMaterialID[materials.Length];
             
             for (int j = 0; j < materials.Length; j++)
             {
+                materials[j].SetTexture("_AnimMap", bakedAnimationInfo.texture);
+                materials[j].SetVector("_UVStepForBone", new Vector4(bakedAnimationInfo.uvStep.x, bakedAnimationInfo.uvStep.y, 0, 0));
+                materials[j].SetBuffer("_Properties", animationPropertiesBuffer);
+                
                 meshInfos[i].materialIDs[j] = m_BRG.RegisterMaterial(materials[j]);
                 drawCommnadsCount++;
             }
@@ -123,7 +157,35 @@ public class TestBRG : MonoBehaviour
         PopulateInstanceDataBuffer();
     }
 
-    private void AllocateInstanceDateBuffer()
+    void InitializeComputeBuffer()
+    {
+        ClipInfo[] clipInfos = new ClipInfo[3];
+        AnimationProperties[] properties = new AnimationProperties[3];
+        for (int i = 0; i < 3; i++)
+        {
+            var clipIndex = UnityEngine.Random.Range(0, bakedAnimationInfo.clipInfos.Length);
+            properties[i].clipIndex = clipIndex; 
+            properties[i].frame = bakedAnimationInfo.clipInfos[clipIndex].row;
+            
+            var clipInfo = bakedAnimationInfo.clipInfos[clipIndex];
+            clipInfos[i].row = clipInfo.row;
+            clipInfos[i].count = clipInfo.count;
+            clipInfos[i].frameStep = 60f;
+        }
+        
+        animationPropertiesBuffer = new ComputeBuffer(3, AnimationProperties.Size());
+        animationPropertiesBuffer.SetData(properties);
+
+        animationClipInfoBuffer = new ComputeBuffer(3, ClipInfo.Size());
+        animationClipInfoBuffer.SetData(clipInfos);
+        
+        // For animation frame calculation
+        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
+        animationFrameCompute.SetBuffer(kernel, "_Properties", animationPropertiesBuffer);
+        animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
+    }
+
+    void AllocateInstanceDateBuffer()
     {
         // kBytesPerInstance = (kSizeOfPackedMatrix * 2) + kSizeOfFloat4; (obj2world, world2obj, color)
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer-ctor.html
@@ -224,10 +286,23 @@ public class TestBRG : MonoBehaviour
 셰이더가 사용하는 메타데이터 값 중 여기에 설정되지 않은 값은 모두 0이 됩니다. 
 기본값이 없는 경우(즉, 기본값이 없는 경우) UNITY_ACCESS_DOTS_INSTANCED_PROP에 0 값을 사용하면 셰이더는 0x00000000 메타데이터 값을 해석하고 버퍼의 시작부터 로드합니다. 
 버퍼의 시작은 0 행렬이므로 이러한 종류의 로드는 합리적인 기본값인 0을 반환하도록 보장됩니다. */
+        
         var metadata = new NativeArray<MetadataValue>(3, Allocator.Temp);
-        metadata[0] = new MetadataValue { NameID = Shader.PropertyToID("unity_ObjectToWorld"), Value = 0x80000000 | byteAddressObjectToWorld, };
-        metadata[1] = new MetadataValue { NameID = Shader.PropertyToID("unity_WorldToObject"), Value = 0x80000000 | byteAddressWorldToObject, };
-        metadata[2] = new MetadataValue { NameID = Shader.PropertyToID("_BaseColor"), Value = 0x80000000 | byteAddressColor, };
+        metadata[0] = new MetadataValue
+        {
+            NameID = Shader.PropertyToID("unity_ObjectToWorld"),
+            Value = 0x80000000 | byteAddressObjectToWorld,
+        };
+        metadata[1] = new MetadataValue
+        {
+            NameID = Shader.PropertyToID("unity_WorldToObject"), 
+            Value = 0x80000000 | byteAddressWorldToObject,
+        };
+        metadata[2] = new MetadataValue
+        {
+            NameID = Shader.PropertyToID("_BaseColor"), 
+            Value = 0x80000000 | byteAddressColor,
+        };
 
         // Batch 생성
         // Finally, create a batch for the instances and make the batch use the GraphicsBuffer with the
@@ -237,9 +312,20 @@ public class TestBRG : MonoBehaviour
 
     private void OnDisable()
     {
-        // 등록된 mesh, material들을 자동으로 등록 해제함
         m_BRG.Dispose();
         m_InstanceData.Dispose();
+        
+        if (animationPropertiesBuffer != null)
+        {
+            animationPropertiesBuffer.Release();
+            animationPropertiesBuffer = null;
+        }
+        
+        if (animationClipInfoBuffer != null)
+        {
+            animationClipInfoBuffer.Release();
+            animationClipInfoBuffer = null;
+        }
     }
 
     // OnPerformCulling 구현, BRG의 main entry point, Culling할 때마다 호출
@@ -249,6 +335,10 @@ public class TestBRG : MonoBehaviour
         BatchCullingOutput cullingOutput,
         IntPtr userContext)
     {
+        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
+        animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
+        animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(3 / 64f), 1, 1);
+        
         // BatchCullingContext을 기반으로 가시성 culling 해야하고
         // 실제 draw command를 생성하도록 BatchCullingOutput을 설정해야 함
 

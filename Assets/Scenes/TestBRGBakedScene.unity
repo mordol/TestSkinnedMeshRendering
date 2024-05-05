@@ -306,6 +306,8 @@ MonoBehaviour:
   gridSize: 0.4
   bakedAnimationInfo: {fileID: 11400000, guid: e82e00ba5a83a2342b074bc37a369aa5, type: 2}
   meshInfos: []
+  animationFrameCompute: {fileID: 7200000, guid: 73e4ecf30b7649440997cccd872d7556,
+    type: 3}
 --- !u!1 &1972695444
 GameObject:
   m_ObjectHideFlags: 0

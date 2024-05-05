@@ -74,6 +74,14 @@ Shader "Unlit/BRGUnlitShader"
                 
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
+
+            struct AnimationProperties
+            {
+                float clipIndex;    // type cast to int
+                float frame;
+            };
+
+            StructuredBuffer<AnimationProperties> _Properties;
             
             // This macro declares _BaseMap as a Texture2D object.
             TEXTURE2D(_BaseMap);
@@ -90,54 +98,58 @@ Shader "Unlit/BRGUnlitShader"
                 float2 _UVStepForBone;
             CBUFFER_END
 
+            // DOTS Instanced properties are completely separate from regular material properties, and you can give them the same name as another regular material property.
             #ifdef UNITY_DOTS_INSTANCING_ENABLED
                 UNITY_DOTS_INSTANCING_START(MaterialPropertyMetadata)
                     UNITY_DOTS_INSTANCED_PROP(float4, _BaseColor)
+                    // UNITY_DOTS_INSTANCED_PROP_OVERRIDE_REQUIRED(float4, EmissionColor) // The property is always loaded from the unity_DOTSInstanceData buffer, and no dynamic branch is ever emitted when accessing the property.
                 UNITY_DOTS_INSTANCING_END(MaterialPropertyMetadata)
 
                 #define _BaseColor UNITY_ACCESS_DOTS_INSTANCED_PROP_WITH_DEFAULT(float4, _BaseColor)
                 //#define _AnimText_ST            UNITY_ACCESS_DOTS_INSTANCED_PROP_FROM_MACRO(float4 , Metadata_AnimText_ST)
             #endif
 
-            // // Get skin matrix function
-            // half4x4 GetSkinMatrix(uint blendIndex, float frameIndex)
-            // {
-	           //  half4x4 mat;
-	           //  // Shift to mid uv position (uvStep * 0.5)
-	           //  float2 uv = float2((float)blendIndex * 3.0 * _UVStepForBone.x, frameIndex * _UVStepForBone.y) + _UVStepForBone * 0.5;
-            //     float2 uvStep = float2(_UVStepForBone.x, 0);
-            //     
-            //     return half4x4(
-            //         SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv, _AnimMap), 0),
-            //         SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv + uvStep, _AnimMap), 0),
-            //         SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv + uvStep + uvStep, _AnimMap), 0),
-            //         half4(0, 0, 0, 1));
-            // }
+            // Get skin matrix function
+            half4x4 GetSkinMatrix(uint blendIndex, float frameIndex)
+            {
+	            half4x4 mat;
+	            // Shift to mid uv position (uvStep * 0.5)
+	            float2 uv = float2((float)blendIndex * 3.0 * _UVStepForBone.x, frameIndex * _UVStepForBone.y) + _UVStepForBone * 0.5;
+                float2 uvStep = float2(_UVStepForBone.x, 0);
+                
+                return half4x4(
+                    SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv, _AnimMap), 0),
+                    SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv + uvStep, _AnimMap), 0),
+                    SAMPLE_TEXTURE2D_LOD(_AnimMap, sampler_AnimMap, TRANSFORM_TEX(uv + uvStep + uvStep, _AnimMap), 0),
+                    half4(0, 0, 0, 1));
+            }
 
             // The vertex shader definition with properties defined in the Varyings 
             // structure. The type of the vert function must match the type (struct)
             // that it returns.
-            Varyings vert(Attributes IN)
+            Varyings vert(Attributes IN, uint instanceID: SV_InstanceID)
             {
-                // // Calc skin matrix for 4 weight
-                // half4x4 skinMatrix;
-                // skinMatrix = GetSkinMatrix(IN.blendIndices.x, _Frame) * IN.blendWeights.x;
-                // skinMatrix += GetSkinMatrix(IN.blendIndices.y, _Frame) * IN.blendWeights.y;
-                // skinMatrix += GetSkinMatrix(IN.blendIndices.z, _Frame) * IN.blendWeights.z;
-                // skinMatrix += GetSkinMatrix(IN.blendIndices.w, _Frame) * IN.blendWeights.w;
-                //
-                // float4 position = mul(skinMatrix, IN.positionOS);
-                
                 // Declaring the output object (OUT) with the Varyings struct.
                 Varyings OUT;
 
                 UNITY_SETUP_INSTANCE_ID(IN);
                 UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
 
+                float frame = _Properties[instanceID].frame;
+                
+                // Calc skin matrix for 4 weight
+                half4x4 skinMatrix;
+                skinMatrix = GetSkinMatrix(IN.blendIndices.x, frame) * IN.blendWeights.x;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.y, frame) * IN.blendWeights.y;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.z, frame) * IN.blendWeights.z;
+                skinMatrix += GetSkinMatrix(IN.blendIndices.w, frame) * IN.blendWeights.w;
+
+                float4 position = mul(skinMatrix, IN.positionOS);
+
                 // The TransformObjectToHClip function transforms vertex positions
                 // from object space to homogenous clip space.
-                //OUT.positionHCS = TransformObjectToHClip(position.xyz);
-                OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
+                OUT.positionHCS = TransformObjectToHClip(position.xyz);
+                //OUT.positionHCS = TransformObjectToHClip(IN.positionOS.xyz);
                 
                 // The TRANSFORM_TEX macro performs the tiling and offset
                 // transformation.

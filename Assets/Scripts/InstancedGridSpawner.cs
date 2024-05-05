@@ -47,7 +47,7 @@ public class InstancedGridSpawner : MonoBehaviour
             return
                 sizeof(float) * 3; // row, count, frameStep
         }
-    };
+    }
     
     public ComputeShader animationFrameCompute;
     ComputeBuffer animationClipInfoBuffer;
