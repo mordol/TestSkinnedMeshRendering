@@ -26,7 +26,7 @@ namespace AnimationBaker
         
         public void OnEnable()
         {
-            if (m_ClipInfoDic != null)
+            if (m_ClipInfoDic != null || clipInfos == null)
                 return;
             
             m_ClipInfoDic = new Dictionary<string, ClipInfo>();

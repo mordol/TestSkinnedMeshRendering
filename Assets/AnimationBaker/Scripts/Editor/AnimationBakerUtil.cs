@@ -8,7 +8,7 @@ namespace AnimationBaker.Editor
     {
         public static BakedAnimationInfo BakeAnimation(GameObject root, SkinnedMeshRenderer skinnedMeshRenderer, AnimationClip[] animationClips)
         {
-            var bakedAnimation = new BakedAnimationInfo();
+            var bakedAnimation = ScriptableObject.CreateInstance<BakedAnimationInfo>();
             
             var bones = skinnedMeshRenderer.bones;
             var bindPoses = skinnedMeshRenderer.sharedMesh.bindposes;
