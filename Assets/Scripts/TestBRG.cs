@@ -4,6 +4,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 public class TestBRG : MonoBehaviour
 {
@@ -11,6 +12,7 @@ public class TestBRG : MonoBehaviour
     public int spawnCount = 1000;
     public float gridSize = 0.5f;
     public AnimationBaker.BakedAnimationInfo bakedAnimationInfo;
+    [FormerlySerializedAs("TrackingTarget")] public Transform trackingTarget;
     
     [System.Serializable]
     public struct MeshInfoForInstancing
@@ -52,6 +54,7 @@ public class TestBRG : MonoBehaviour
     }
     
     public ComputeShader animationFrameCompute;
+    public string animationFrameComputeKernelName = "AnimationFrameForBRG";
     ComputeBuffer animationPropertiesBuffer;
     ComputeBuffer animationClipInfoBuffer;
     
@@ -154,6 +157,10 @@ public class TestBRG : MonoBehaviour
 
         AllocateInstanceDateBuffer();
         PopulateInstanceDataBuffer();
+        
+        // TODO: refactoring
+        var kernel = animationFrameCompute.FindKernel(animationFrameComputeKernelName);
+        animationFrameCompute.SetBuffer(kernel, "_InstanceData", m_InstanceData);
     }
 
     void InitializeComputeBuffer()
@@ -182,9 +189,10 @@ public class TestBRG : MonoBehaviour
         animationClipInfoBuffer.SetData(clipInfos);
         
         // For animation frame calculation
-        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
+        var kernel = animationFrameCompute.FindKernel(animationFrameComputeKernelName);
         animationFrameCompute.SetBuffer(kernel, "_Properties", animationPropertiesBuffer);
         animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
+        animationFrameCompute.SetInt("_InstanceCount", spawnCount);
     }
 
     void AllocateInstanceDateBuffer()
@@ -321,8 +329,12 @@ public class TestBRG : MonoBehaviour
         if (meshInfos == null || meshInfos.Length <= 0)
             return;
         
-        var kernel = animationFrameCompute.FindKernel("AnimationFrameForBRG");
+        var kernel = animationFrameCompute.FindKernel(animationFrameComputeKernelName);
         animationFrameCompute.SetFloat("_TimeDelta", Time.deltaTime);
+        if (trackingTarget != null)
+        {
+            animationFrameCompute.SetVector("_TargetPosition", trackingTarget.position);
+        }
         animationFrameCompute.Dispatch(kernel, Mathf.CeilToInt(spawnCount / 64f), 1, 1);   
     }
 

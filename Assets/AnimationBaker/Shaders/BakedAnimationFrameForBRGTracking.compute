@@ -1,0 +1,72 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AnimationFrameForBRGTracking
+
+struct AnimationProperties
+{
+    float clipIndex;
+    float frame;
+};
+
+RWStructuredBuffer<AnimationProperties> _Properties;
+
+struct ClipInfo
+{
+    float row;
+    float count;
+    float frameStep;
+};
+
+StructuredBuffer<ClipInfo> _ClipInfo;
+
+// For instance data (BRG SSBO)
+RWByteAddressBuffer _InstanceData;
+
+float _TimeDelta;
+float3 _TargetPosition;
+uint _InstanceCount;
+
+#define SIZEOF_PACKEDMATRIX 48
+#define DISTANCE 1.0
+
+[numthreads(64,1,1)]
+void AnimationFrameForBRGTracking (uint3 id : SV_DispatchThreadID)
+{
+    // Calculate the frame for the animation
+    
+    uint numStructs, stride;
+    _ClipInfo.GetDimensions(numStructs, stride);
+    
+    int clipIndex = (int)_Properties[id.x].clipIndex % numStructs;
+    float frame = _Properties[id.x].frame + _ClipInfo[clipIndex].frameStep * _TimeDelta;
+    frame = frame - _ClipInfo[clipIndex].row;
+    frame = frame % _ClipInfo[clipIndex].count;
+    _Properties[id.x].frame = frame + _ClipInfo[clipIndex].row;
+
+    // Calculate the position to track
+        // Read and write matrix of instance in SSBO
+
+    /*
+    // _InstanceData byte layout
+    index,
+    96,     48byte packed matrix(object to world) * 1,000(instances)
+    48096,  48byte packed matrix(world to object) * 1,000(instances)
+    96096,  16byte float4(color) * 1,000(instances)
+    */
+
+    // Read the position of the instance
+        // Position is the last row(3) of the packed matrix
+    int instanceOffset = 96 + id.x * SIZEOF_PACKEDMATRIX;   // 96 is the offset of the first packed matrix
+    float3 position = asfloat(_InstanceData.Load3(instanceOffset + 36)); // 36 is the offset of the last row(3) of the packed matrix
+
+    float dist = distance(position, _TargetPosition);
+    // Scale and reverse distance so that we get a value which fades as it gets further away.
+    // Max distance is 5.0.
+    dist = DISTANCE - clamp(0.0, DISTANCE, dist);
+
+    // Get the vector from the pusher to the position, and scale it.
+    float3 push = normalize(position - _TargetPosition) * dist;
+
+    // Set the new position to track
+    float3 newPosition = position + push;
+    _InstanceData.Store3(instanceOffset + 36, asuint(newPosition));
+}
