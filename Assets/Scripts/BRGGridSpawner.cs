@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Serialization;
 
-public class TestBRG : MonoBehaviour
+public class BRGGridSpawner : MonoBehaviour
 {
     public GameObject spawnPrefab;
     public int spawnCount = 1000;

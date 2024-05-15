@@ -1,5 +1,5 @@
 // Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel AnimationFrameForBRGTracking
+#pragma kernel AnimationFrameForBRG_Push
 
 struct AnimationProperties
 {
@@ -29,7 +29,7 @@ uint _InstanceCount;
 #define DISTANCE 1.0
 
 [numthreads(64,1,1)]
-void AnimationFrameForBRGTracking (uint3 id : SV_DispatchThreadID)
+void AnimationFrameForBRG_Push (uint3 id : SV_DispatchThreadID)
 {
     // Calculate the frame for the animation
     

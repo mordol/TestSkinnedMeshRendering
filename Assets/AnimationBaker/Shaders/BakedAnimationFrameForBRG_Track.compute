@@ -1,0 +1,163 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AnimationFrameForBRG_Track
+
+struct AnimationProperties
+{
+    float clipIndex;
+    float frame;
+};
+RWStructuredBuffer<AnimationProperties> _Properties;
+
+struct ClipInfo
+{
+    float row;
+    float count;
+    float frameStep;
+};
+StructuredBuffer<ClipInfo> _ClipInfo;
+
+// For instance data (BRG SSBO)
+RWByteAddressBuffer _InstanceData;
+RWStructuredBuffer<float3> _Directions;
+
+float _TimeDelta;
+float3 _TargetPosition;
+uint _InstanceCount;
+
+#define SIZEOF_PACKEDMATRIX 48
+#define OFFSET_POSITION 36
+
+#define NEIGHBOR_RADIUS 1.0// 0.5
+#define TRACK_RADIUS 100.0//100.0
+#define ROTATION_SPEED 3.5
+#define VELOCITY 1.0//1.5
+#define SEPARATION_WEIGHT 0.8
+#define COHESION_WEIGHT 0.1
+
+uint GetInstanceOffset(uint instanceIndex)
+{
+    return 96 + instanceIndex * SIZEOF_PACKEDMATRIX;
+}
+
+float3 GetInstancePosition(uint instanceOffset)
+{
+    return asfloat(_InstanceData.Load3(instanceOffset + OFFSET_POSITION));
+}
+
+void SetInstancePosition(uint instanceOffset, float3 position)
+{
+    _InstanceData.Store3(instanceOffset + OFFSET_POSITION, asuint(position));
+}
+
+void SetInstanceTransform(uint instanceOffset, float3 direction, float3 position)
+{
+    //https://stackoverflow.com/questions/18558910/direction-vector-to-rotation-matrix
+    
+    const float3 up = float3(0, 1, 0);
+    
+    float3 xaxis = cross(up, direction);
+    xaxis = normalize(xaxis);
+
+    float3 yaxis = cross(direction, xaxis);
+    yaxis = normalize(yaxis);
+    
+    const uint sizeFloat3 = 12;
+    _InstanceData.Store3(instanceOffset, asuint(xaxis));
+    _InstanceData.Store3(instanceOffset + sizeFloat3, asuint(yaxis));
+    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 , asuint(direction));
+    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 + sizeFloat3 , asuint(position));
+}
+
+[numthreads(64,1,1)]
+void AnimationFrameForBRG_Track (uint3 id : SV_DispatchThreadID)
+{
+    //
+    // Calculate the frame for the animation
+    
+    uint numStructs, stride;
+    _ClipInfo.GetDimensions(numStructs, stride);
+    
+    int clipIndex = (int)_Properties[id.x].clipIndex % numStructs;
+    float frame = _Properties[id.x].frame + _ClipInfo[clipIndex].frameStep * _TimeDelta;
+    frame = frame - _ClipInfo[clipIndex].row;
+    frame = frame % _ClipInfo[clipIndex].count;
+    _Properties[id.x].frame = frame + _ClipInfo[clipIndex].row;
+
+    //
+    // Calculate the position to track
+        // Read and write matrix of instance in SSBO
+
+    /*
+    // _InstanceData byte layout
+    index,
+    96,     48byte packed matrix(object to world) * 1,000(instances)
+    48096,  48byte packed matrix(world to object) * 1,000(instances)
+    96096,  16byte float4(color) * 1,000(instances)
+    */
+    
+    //
+    // Boids simulation
+    
+    float3 separation = float3(0, 0, 0);
+    float3 alignment = float3(0, 0, 0);
+    float3 cohesion = float3(0, 0, 0);
+
+    uint instanceOffset = GetInstanceOffset(id.x);
+    float3 instancePosition = GetInstancePosition(instanceOffset);
+    float3 instanceDirection = _Directions[id.x];
+    
+    uint neighbors = 0;
+    for (uint i = 0; i < _InstanceCount; i++)
+    {
+        if (i == id.x)
+            continue;
+
+        float3 neighborPosition = GetInstancePosition(GetInstanceOffset(i));
+        float3 diff = instancePosition - neighborPosition;
+        float distance = length(diff);
+        if (distance > NEIGHBOR_RADIUS)
+            continue;
+
+        // Separation
+        float scaler = clamp(1.0 - distance / NEIGHBOR_RADIUS, 0.0, 1.0);
+        separation += diff * (scaler / distance);
+
+        // Alignment
+        alignment += _Directions[i];
+
+        // Cohesion
+        cohesion += neighborPosition;
+
+        neighbors++;
+    }
+
+    float avg = 1.0 / (neighbors + 1);  // +1 for the current instance
+
+    float3 diffTarget = _TargetPosition - instancePosition;
+    float distanceTarget = length(diffTarget);
+    if (distanceTarget < TRACK_RADIUS)
+    {
+        alignment = normalize(diffTarget);
+    }
+    else
+    {
+        alignment *= avg;
+    }
+
+    if (neighbors > 0)
+    {
+        cohesion *= avg;
+        cohesion = normalize(cohesion - instancePosition);        
+    }
+    
+    float3 direction = (separation * SEPARATION_WEIGHT) + alignment + (cohesion * COHESION_WEIGHT);
+    
+    float ip = exp(-ROTATION_SPEED * _TimeDelta);
+    instanceDirection = lerp(direction, normalize(instanceDirection), ip);
+    instanceDirection = normalize(float3(instanceDirection.x, 0, instanceDirection.z));
+    instancePosition += instanceDirection * (VELOCITY * _TimeDelta);
+    
+    SetInstanceTransform(instanceOffset, instanceDirection, instancePosition);
+
+    _Directions[id.x] = instanceDirection;
+}
