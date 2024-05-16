@@ -194,6 +194,7 @@ public class TrackingZombieSpawner : MonoBehaviour
         var kernel = animationFrameCompute.FindKernel(animationFrameComputeKernelName);
         animationFrameCompute.SetBuffer(kernel, "_Properties", animationPropertiesBuffer);
         animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
+        animationFrameCompute.SetInt("_ClipCount", clipInfos.Length);
         animationFrameCompute.SetInt("_InstanceCount", spawnCount);
     }
 
