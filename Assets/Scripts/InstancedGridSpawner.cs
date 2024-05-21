@@ -187,6 +187,7 @@ public class InstancedGridSpawner : MonoBehaviour
         animationClipInfoBuffer = new ComputeBuffer(spawnCount, ClipInfo.Size());
         animationClipInfoBuffer.SetData(clipInfos);
         animationFrameCompute.SetBuffer(kernel, "_ClipInfo", animationClipInfoBuffer);
+        animationFrameCompute.SetInt("_ClipCount", clipInfos.Length);
     }
     
     private void OnDisable()
