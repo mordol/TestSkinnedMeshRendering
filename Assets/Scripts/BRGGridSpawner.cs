@@ -4,7 +4,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Serialization;
+using BRGUtils;
 
 public class BRGGridSpawner : MonoBehaviour
 {
@@ -12,7 +12,7 @@ public class BRGGridSpawner : MonoBehaviour
     public int spawnCount = 1000;
     public float gridSize = 0.5f;
     public AnimationBaker.BakedAnimationInfo bakedAnimationInfo;
-    [FormerlySerializedAs("TrackingTarget")] public Transform trackingTarget;
+    public Transform trackingTarget;
     
     [System.Serializable]
     public struct MeshInfoForInstancing
@@ -60,7 +60,6 @@ public class BRGGridSpawner : MonoBehaviour
     
     
     // For BRG
-    
     private BatchRendererGroup m_BRG;
     int drawCommnadsCount = 0;
     
@@ -68,46 +67,9 @@ public class BRGGridSpawner : MonoBehaviour
     private BatchID m_BatchID;
 
     // Some helper constants to make calculations more convenient.
-    private const int kSizeOfMatrix = sizeof(float) * 4 * 4;	// 64
-    private const int kSizeOfPackedMatrix = sizeof(float) * 4 * 3;	// 48
-    private const int kSizeOfFloat4 = sizeof(float) * 4;		// 16
-    private const int kBytesPerInstance = (kSizeOfPackedMatrix * 2) + kSizeOfFloat4;	// 96 + 16 = 112
-    private const int kExtraBytes = kSizeOfMatrix * 2;		// 128
-
-    // The PackedMatrix is a convenience type that converts matrices into
-    // the format that Unity-provided SRP shaders expect.
-    struct PackedMatrix
-    {
-        public float c0x;
-        public float c0y;
-        public float c0z;
-        public float c1x;
-        public float c1y;
-        public float c1z;
-        public float c2x;
-        public float c2y;
-        public float c2z;
-        public float c3x;
-        public float c3y;
-        public float c3z;
-
-        public PackedMatrix(Matrix4x4 m)
-        {
-            c0x = m.m00;
-            c0y = m.m10;
-            c0z = m.m20;
-            c1x = m.m01;
-            c1y = m.m11;
-            c1z = m.m21;
-            c2x = m.m02;
-            c2y = m.m12;
-            c2z = m.m22;
-            c3x = m.m03;
-            c3y = m.m13;
-            c3z = m.m23;
-        }
-    }
-
+    private const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2) + Size.kSizeOfFloat4;	// 96 + 16 = 112
+    private const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
+    
     void Start()
     {
         if (spawnPrefab == null || spawnCount <= 0)
@@ -266,18 +228,18 @@ public class BRGGridSpawner : MonoBehaviour
         // Calculates start addresses for the different instanced properties. unity_ObjectToWorld starts
         // at address 96 instead of 64, because the computeBufferStartIndex parameter of SetData
         // is expressed as source array elements, so it is easier to work in multiples of sizeof(PackedMatrix).
-        uint byteAddressObjectToWorld = kSizeOfPackedMatrix * 2;
-        uint byteAddressWorldToObject = byteAddressObjectToWorld + kSizeOfPackedMatrix * (uint)spawnCount;
-        uint byteAddressColor = byteAddressWorldToObject + kSizeOfPackedMatrix * (uint)spawnCount;
+        uint byteAddressObjectToWorld = Size.kSizeOfPackedMatrix * 2;
+        uint byteAddressWorldToObject = byteAddressObjectToWorld + Size.kSizeOfPackedMatrix * (uint)spawnCount;
+        uint byteAddressColor = byteAddressWorldToObject + Size.kSizeOfPackedMatrix * (uint)spawnCount;
         
         // Upload the instance data to the GraphicsBuffer so the shader can load them.
         // https://docs.unity3d.com/ScriptReference/GraphicsBuffer.SetData.html
         // public void SetData(Array data, int managedBufferStartIndex, int graphicsBufferStartIndex, int count);
            // graphicsBufferStartIndex: The first element index in the graphics buffer to receive the data.
         m_InstanceData.SetData(zero, 0, 0, 1);
-        m_InstanceData.SetData(objectToWorld, 0, (int)(byteAddressObjectToWorld / kSizeOfPackedMatrix), objectToWorld.Length); // 96 / 48 = 2
-        m_InstanceData.SetData(worldToObject, 0, (int)(byteAddressWorldToObject / kSizeOfPackedMatrix), worldToObject.Length); // 240 / 48 = 5
-        m_InstanceData.SetData(colors, 0, (int)(byteAddressColor / kSizeOfFloat4), colors.Length); // 384 / 16 = 24
+        m_InstanceData.SetData(objectToWorld, 0, (int)(byteAddressObjectToWorld / Size.kSizeOfPackedMatrix), objectToWorld.Length); // 96 / 48 = 2
+        m_InstanceData.SetData(worldToObject, 0, (int)(byteAddressWorldToObject / Size.kSizeOfPackedMatrix), worldToObject.Length); // 240 / 48 = 5
+        m_InstanceData.SetData(colors, 0, (int)(byteAddressColor / Size.kSizeOfFloat4), colors.Length); // 384 / 16 = 24
         
         // Set up metadata values to point to the instance data. Set the most significant bit 0x80000000 in each
         // which instructs the shader that the data is an array with one value per instance, indexed by the instance index.

@@ -106,7 +106,7 @@ Animation:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1279511415802592982}
   m_Enabled: 1
-  serializedVersion: 3
+  serializedVersion: 4
   m_Animation: {fileID: 7400000, guid: 0aaab721d87c3d84daddd7c7a85d44fd, type: 3}
   m_Animations:
   - {fileID: 7400000, guid: 0aaab721d87c3d84daddd7c7a85d44fd, type: 3}
@@ -117,7 +117,8 @@ Animation:
   m_WrapMode: 0
   m_PlayAutomatically: 1
   m_AnimatePhysics: 0
-  m_CullingType: 0
+  m_UpdateMode: 0
+  m_CullingType: 1
 --- !u!1 &1644587271301626297
 GameObject:
   m_ObjectHideFlags: 0
@@ -294,6 +295,8 @@ SkinnedMeshRenderer:
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 3
   m_RayTraceProcedural: 0
+  m_RayTracingAccelStructBuildFlagsOverride: 0
+  m_RayTracingAccelStructBuildFlags: 1
   m_RenderingLayerMask: 4294967295
   m_RendererPriority: 0
   m_Materials:
