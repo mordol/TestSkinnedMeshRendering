@@ -14,6 +14,11 @@ Shader "Particles/BRGParticleShader"
         [HideInInspector] _SrcBlendAlpha("__srcA", Float) = 1.0
         [HideInInspector] _DstBlendAlpha("__dstA", Float) = 1.0
         //[HideInInspector] _ZWrite("__zw", Float) = 0.0
+        
+        // -------------------------------------
+        // Test trajectory properties
+        _Position("Position", Vector) = (0,0,0,0)
+        _TargetPosition("Target Position", Vector) = (0,0,0,0)
     }
     SubShader
     {
@@ -45,7 +50,8 @@ Shader "Particles/BRGParticleShader"
             //Blend One OneMinusSrcAlpha
             //Blend SrcAlpha OneMinusSrcAlpha
             ColorMask RGB
-            Cull Off
+            Cull Back
+            //Cull Off
             Lighting Off
             ZWrite Off
                         
@@ -85,6 +91,9 @@ Shader "Particles/BRGParticleShader"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float4 _BaseColor;
+
+                float4 _Position;
+                float4 _TargetPosition;
             CBUFFER_END
             
             v2f vert (appdata v)
@@ -93,9 +102,41 @@ Shader "Particles/BRGParticleShader"
 
                 UNITY_SETUP_INSTANCE_ID(v);
                 UNITY_TRANSFER_INSTANCE_ID(v, o);
+
+                // Test trajectory
+                float3 temp = _Position - _TargetPosition;
+                float distance = length(temp);
+                float3 direction = normalize(temp);
+                float3 up = float3(0, 1, 0);
+                float3 right = normalize(cross(up, direction));
+                float3 newUp = cross(direction, right);
+                float3 position = _TargetPosition;
+
+                // Make rotation matrix with right, up, forward
+                float3x3 lookAtMatrix = float3x3(
+                    right.x, newUp.x, direction.x,
+                    right.y, newUp.y, direction.y,
+                    right.z, newUp.z, direction.z
+                );
                 
-                o.vertex = TransformObjectToHClip(v.vertex.xyz);
+                float3x3 result = lookAtMatrix;
+
+                // Scale
+                float3 scale = float3(0.1, 1, distance);
+                
+                // Make trajectory matrix
+                float4x4 trajectoryMatrix = float4x4(
+                    result[0].x * scale.x, result[0].y * scale.y, result[0].z * scale.z, position.x,
+                    result[1].x * scale.x, result[1].y * scale.y, result[1].z * scale.z, position.y,
+                    result[2].x * scale.x, result[2].y * scale.y, result[2].z * scale.z, position.z,
+                    0, 0, 0, 1
+                );
+
+                float4 newV = mul(trajectoryMatrix, v.vertex);
+                o.vertex = TransformWorldToHClip(newV);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
+
+                // TODO: invert target and direction
 
                 return o;
             }
