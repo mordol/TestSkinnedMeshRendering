@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: BRGTrajectory
+  m_Name: TrajectoryDeformation
   m_Shader: {fileID: 4800000, guid: f8b4005a7c90545e2a0665e9c2fbbf27, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -145,7 +145,7 @@ Material:
     - _Position: {r: 1.53, g: 0, b: 0.68, a: 0}
     - _SoftParticleFadeParams: {r: 0, g: 0, b: 0, a: 0}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
-    - _TargetPosition: {r: -3.48, g: 0, b: 4.82, a: 0}
+    - _TargetPosition: {r: 6.42, g: 0, b: 4.98, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
 --- !u!114 &8016358444000843630

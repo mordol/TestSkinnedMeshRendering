@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+// Responsible for passing information to the shader to calculate trajectory
 public class TestTrajectoryUpdater : MonoBehaviour
 {
     Material material;
