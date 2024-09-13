@@ -1,0 +1,78 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel BulletTransformForBRG
+
+// For instance data (BRG SSBO)
+RWByteAddressBuffer _InstanceData;
+
+float _TimeDelta;
+
+#define SIZEOF_PACKEDMATRIX 48
+#define OFFSET_POSITION 36
+
+uint GetInstanceOffset(uint instanceIndex)
+{
+    return 96 + instanceIndex * SIZEOF_PACKEDMATRIX;
+}
+
+float3 GetInstancePosition(uint instanceOffset)
+{
+    return asfloat(_InstanceData.Load3(instanceOffset + OFFSET_POSITION));
+}
+
+void SetInstancePosition(uint instanceOffset, float3 position)
+{
+    _InstanceData.Store3(instanceOffset + OFFSET_POSITION, asuint(position));
+}
+
+void SetInstanceTransform(uint instanceOffset, float3 direction, float3 position)
+{
+    //https://stackoverflow.com/questions/18558910/direction-vector-to-rotation-matrix
+    
+    const float3 up = float3(0, 1, 0);
+    
+    float3 xaxis = cross(up, direction);
+    xaxis = normalize(xaxis);
+
+    float3 yaxis = cross(direction, xaxis);
+    yaxis = normalize(yaxis);
+    
+    const uint sizeFloat3 = 12;
+    _InstanceData.Store3(instanceOffset, asuint(xaxis));
+    _InstanceData.Store3(instanceOffset + sizeFloat3, asuint(yaxis));
+    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 , asuint(direction));
+    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 + sizeFloat3 , asuint(position));
+}
+
+
+// Hash function  
+uint hash(uint state)  
+{  
+    state ^= 2747636419u;  
+    state *= 2654435769u;  
+    state ^= state >> 16;  
+    state *= 2654435769u;  
+    state ^= state >> 16;  
+    state *= 2654435769u;  
+    return state;  
+}  
+
+// Random float between 0 and 1  
+float random(uint seed)  
+{  
+    return hash(seed) / 4294967295.0; // 2^32 - 1  
+}  
+
+
+//[numthreads(8,8,1)]
+[numthreads(64,1,1)]
+void BulletTransformForBRG (uint3 id : SV_DispatchThreadID)
+{
+    // Use the thread ID and some time value as seed  
+    uint seed = id.x + id.y * 1000 + _TimeDelta * 10000;  
+    //float randomValue = random(seed); 
+    
+    uint instanceOffset = GetInstanceOffset(id.x);
+    //float3 position = GetInstancePosition(instanceOffset);
+    
+    SetInstancePosition(instanceOffset, float3((random(seed) - 0.5) * 10.0, 0.0, random(seed + 1.0) * 20.0));
+}

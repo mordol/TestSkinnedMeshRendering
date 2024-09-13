@@ -10,16 +10,22 @@ using Random = UnityEngine.Random;
 
 public class BulletShooterBRG : MonoBehaviour
 {
-    public GameObject bulletPrefab;
     public float fireRate = 0.2f; // 총알 발사 속도 (초당 발사 횟수)
     public float angleRange = 60f; // 총알이 발사되는 각도 범위
     public float pingPongSpeed = 2f; // Ping Pong 속도
     public int spawnCount = 1000;
-
+    
+    public Material bulletMaterial;
+    
+    
     float fireTimer = 0f;
     bool isFiring = false;
     List<Vector3> fireVectors = new List<Vector3>();
 
+    public ComputeShader bulletTransformComputeShader;
+    int m_KernelIndex;
+    const string kComputeShaderName = "BulletTransformForBRG";
+    
     // For BRG
     BatchRendererGroup m_BRG;
     
@@ -30,20 +36,39 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMaterialID m_BatchMaterialID;
     
     // Some helper constants to make calculations more convenient.
-    private const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
-    private const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
+    const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
+    const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
     
     void Start()
     {
         m_BRG = new BatchRendererGroup(OnPerformCulling, IntPtr.Zero);
 
-        var mesh = bulletPrefab.GetComponent<MeshFilter>().sharedMesh;
+        var mesh = new Mesh();
+        mesh.vertices = new Vector3[]
+        {
+            new Vector3(-0.5f, 0, 0),
+            new Vector3(0.5f, 0, 0),
+            new Vector3(-0.5f, 0, 1f),
+            new Vector3(0.5f, 0, 1f)
+        };
+        mesh.triangles = new int[] { 0, 2, 1, 2, 3, 1 };
+        mesh.uv = new Vector2[]
+        {
+            new Vector2(0, 0),
+            new Vector2(1, 0),
+            new Vector2(0, 1),
+            new Vector2(1, 1)
+        };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
         m_BatchMeshID = m_BRG.RegisterMesh(mesh);
+        m_BatchMaterialID = m_BRG.RegisterMaterial(bulletMaterial);
         
-        var material = bulletPrefab.GetComponent<MeshRenderer>().sharedMaterial;
-        m_BatchMaterialID = m_BRG.RegisterMaterial(material);
+        m_KernelIndex = bulletTransformComputeShader.FindKernel(kComputeShaderName);
         
         PopulateInstanceData();
+        
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_InstanceData", m_InstanceData);
     }
 
     void Update()
@@ -69,6 +94,9 @@ public class BulletShooterBRG : MonoBehaviour
                 FireBullet();
             }
         }
+        
+        bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
+        bulletTransformComputeShader.Dispatch(m_KernelIndex, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
     }
 
     void FireBullet()
@@ -78,18 +106,7 @@ public class BulletShooterBRG : MonoBehaviour
         Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
 
         // 발사 벡터를 리스트에 추가
-        fireVectors.Add(direction);
-        
-        // // 총알 발사
-        // GameObject bullet = Instantiate(bulletPrefab, transform.position, Quaternion.LookRotation(direction));
-        // bullet.SetActive(true);
-        //
-        // // 총알에 힘을 가하는 등의 추가 작업이 필요할 수 있습니다.
-        // Rigidbody bulletRb = bullet.GetComponent<Rigidbody>();
-        // if (bulletRb != null)
-        // {
-        //     bulletRb.velocity = direction * 10f; // 총알 속도 설정 (10은 임의의 값입니다)
-        // }
+        //fireVectors.Add(direction);
     }
     
     // Raw buffers are allocated in ints. This is a utility method that calculates
@@ -118,7 +135,7 @@ public class BulletShooterBRG : MonoBehaviour
 
         for (int i = 0; i < spawnCount; i++)
         {
-            var matrix = Matrix4x4.TRS(new Vector3(Random.value, Random.value, 0), Quaternion.identity, Vector3.one);
+            var matrix = Matrix4x4.TRS(new Vector3(Random.value, 0, Random.value * 10f), Quaternion.identity, Vector3.one);
                 
             // Convert the transform matrices into the packed format that the shader expects.
             objectToWorld[i] = new PackedMatrix(matrix);
