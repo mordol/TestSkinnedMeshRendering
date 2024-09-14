@@ -94,12 +94,15 @@ public class BulletShooter : MonoBehaviour
 
     float FireBullet(float fireTimer)
     {
-        var fireCount = Mathf.CeilToInt(fireTimer / fireRate);
-        float remainTime = fireTimer - fireCount * fireRate;
+        var fireCount = Mathf.FloorToInt(fireTimer / fireRate);
+        float remainTime = fireTimer % fireRate;
+        float currentTime = Time.time;
+
         for (int i = 0; i < fireCount; i++)
         {
-            float time = (Time.time - ((fireCount - 1 - i) * fireRate)) * pingPongSpeed;
-            float angle = Mathf.PingPong(time, angleRange) - (angleRange / 2f);
+            float bulletTime = currentTime - (fireCount - 1 - i) * fireRate;
+            float oscillationTime = bulletTime * pingPongSpeed;
+            float angle = Mathf.PingPong(oscillationTime, angleRange) - (angleRange / 2f);
             Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
 
             var bulletData = GetNewBulletData();
