@@ -78,8 +78,7 @@ public class BulletShooter : MonoBehaviour
 
             if (fireTimer >= fireRate)
             {
-                fireTimer = 0f;
-                FireBullet();
+                fireTimer = FireBullet(fireTimer);
             }
         }
         
@@ -93,16 +92,23 @@ public class BulletShooter : MonoBehaviour
         }
     }
 
-    void FireBullet()
+    float FireBullet(float fireTimer)
     {
-        // 각도 계산
-        float angle = Mathf.PingPong(Time.time * pingPongSpeed, angleRange) - (angleRange / 2f);
-        Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
+        var fireCount = Mathf.CeilToInt(fireTimer / fireRate);
+        float remainTime = fireTimer - fireCount * fireRate;
+        for (int i = 0; i < fireCount; i++)
+        {
+            float time = (Time.time - ((fireCount - 1 - i) * fireRate)) * pingPongSpeed;
+            float angle = Mathf.PingPong(time, angleRange) - (angleRange / 2f);
+            Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
 
-        var bulletData = GetNewBulletData();
-        bulletData.direction = direction;
-        bulletData.position = transform.position;
-        //bulletData.bullet.transform.SetPositionAndRotation(bulletData.position, Quaternion.LookRotation(direction));
+            var bulletData = GetNewBulletData();
+            bulletData.direction = direction;
+            bulletData.position = transform.position;
+            //bulletData.bullet.transform.SetPositionAndRotation(bulletData.position, Quaternion.LookRotation(direction));
+        }
+
+        return remainTime;
     }
     
     BulletData GetNewBulletData()

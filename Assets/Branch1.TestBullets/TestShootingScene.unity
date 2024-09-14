@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   bulletPrefab: {fileID: 1482767994}
-  fireRate: 0.0001
+  fireRate: 0.004
   angleRange: 60
   pingPongSpeed: 300
   spawnCount: 1000

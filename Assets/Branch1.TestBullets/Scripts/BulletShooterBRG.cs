@@ -34,6 +34,10 @@ public class BulletShooterBRG : MonoBehaviour
 
     BatchMeshID m_BatchMeshID;
     BatchMaterialID m_BatchMaterialID;
+
+    // instance visible flags
+    bool[] m_InstanceVisibles;
+    int m_VisibleInstanceCount;
     
     // Some helper constants to make calculations more convenient.
     const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
@@ -66,6 +70,9 @@ public class BulletShooterBRG : MonoBehaviour
         
         m_KernelIndex = bulletTransformComputeShader.FindKernel(kComputeShaderName);
         
+        m_InstanceVisibles = new bool[spawnCount];
+        m_VisibleInstanceCount = 0;
+
         PopulateInstanceData();
         
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_InstanceData", m_InstanceData);
@@ -90,23 +97,32 @@ public class BulletShooterBRG : MonoBehaviour
 
             if (fireTimer >= fireRate)
             {
-                fireTimer = 0f;
-                FireBullet();
+                fireTimer = FireBullet(fireTimer);
             }
         }
+
+        // TODO: fireVectors를 compute shader에 전달 후 fireVectors를 비우기
         
         bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
         bulletTransformComputeShader.Dispatch(m_KernelIndex, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
+
+        // TODO: Update instance visible flags from compute shader
     }
 
-    void FireBullet()
+    float FireBullet(float fireTimer)
     {
-        // 각도 계산
-        float angle = Mathf.PingPong(Time.time * pingPongSpeed, angleRange) - (angleRange / 2f);
-        Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
+        var fireCount = Mathf.CeilToInt(fireTimer / fireRate);
+        float remainTime = fireTimer - fireCount * fireRate;
+        for (int i = 0; i < fireCount; i++)
+        {
+            float time = (Time.time - ((fireCount - 1 - i) * fireRate)) * pingPongSpeed;
+            float angle = Mathf.PingPong(time, angleRange) - (angleRange / 2f);
+            Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
 
-        // 발사 벡터를 리스트에 추가
-        //fireVectors.Add(direction);
+            //fireVectors.Add(direction);
+        }
+
+        return remainTime;
     }
     
     // Raw buffers are allocated in ints. This is a utility method that calculates
@@ -229,12 +245,14 @@ public class BulletShooterBRG : MonoBehaviour
         // You must always allocate the arrays using Allocator.TempJob.
         drawCommands->drawCommands = (BatchDrawCommand*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawCommand>(), alignment, Allocator.TempJob);
         drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
+        
+        // TODO: m_VisibleInstanceCount를 사용하여 drawCommands->visibleInstanceCount 초기화
         drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(spawnCount * sizeof(int), alignment, Allocator.TempJob);
+        drawCommands->visibleInstanceCount = spawnCount;
 
         drawCommands->drawCommandPickingInstanceIDs = null;
         drawCommands->drawCommandCount = 1;
         drawCommands->drawRangeCount = 1;
-        drawCommands->visibleInstanceCount = spawnCount;
 
         // This example doens't use depth sorting, so it leaves instanceSortingPositions as null.
         drawCommands->instanceSortingPositions = null;
@@ -244,7 +262,7 @@ public class BulletShooterBRG : MonoBehaviour
         // starting from offset 0 in the array, using the batch, material and mesh
         // IDs registered in the Start() method. It doesn't set any special flags.
         drawCommands->drawCommands[0].visibleOffset = 0;
-        drawCommands->drawCommands[0].visibleCount = (uint)spawnCount;
+        drawCommands->drawCommands[0].visibleCount = (uint)spawnCount;  // TODO: m_VisibleInstanceCount를 사용하여 초기화
         drawCommands->drawCommands[0].batchID = m_BatchID;
         drawCommands->drawCommands[0].materialID = m_BatchMaterialID;
         drawCommands->drawCommands[0].meshID = m_BatchMeshID;
@@ -266,6 +284,8 @@ public class BulletShooterBRG : MonoBehaviour
         // Finally, write the actual visible instance indices to the array. In a more complicated
         // implementation, this output would depend on what is visible, but this example
         // assumes that everything is visible.
+
+        // TODO: m_InstanceVisibles를 사용하여 drawCommands->visibleInstances 초기화
         for (int i = 0; i < spawnCount; ++i)
             drawCommands->visibleInstances[i] = i;
         
