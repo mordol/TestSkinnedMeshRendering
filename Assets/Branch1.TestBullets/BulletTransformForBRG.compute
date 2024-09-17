@@ -1,10 +1,28 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel BulletTransformForBRG
+#pragma kernel BulletTransformForBRG_InitBullets
 
 // For instance data (BRG SSBO)
 RWByteAddressBuffer _InstanceData;
+int _InstanceCount;
 
+struct Bullet
+{
+    float3 direction;
+    float accumulatedDistance;
+};
+RWStructuredBuffer<Bullet> _Bullets;
+
+// Bullet visible flags
+RWStructuredBuffer<int> _VisibleFlags;
+
+RWStructuredBuffer<float3> _FireVectors;
+
+float _BulletSpeed;
 float _TimeDelta;
+float3 _PlayerPosition;
+int _FireVectorCount;
+
 
 #define SIZEOF_PACKEDMATRIX 48
 #define OFFSET_POSITION 36
@@ -24,7 +42,7 @@ void SetInstancePosition(uint instanceOffset, float3 position)
     _InstanceData.Store3(instanceOffset + OFFSET_POSITION, asuint(position));
 }
 
-void SetInstanceTransform(uint instanceOffset, float3 direction, float3 position)
+void SetInstanceTransform(uint instanceOffset, float3 direction, float3 position, float3 scale)
 {
     //https://stackoverflow.com/questions/18558910/direction-vector-to-rotation-matrix
     
@@ -37,42 +55,58 @@ void SetInstanceTransform(uint instanceOffset, float3 direction, float3 position
     yaxis = normalize(yaxis);
     
     const uint sizeFloat3 = 12;
-    _InstanceData.Store3(instanceOffset, asuint(xaxis));
-    _InstanceData.Store3(instanceOffset + sizeFloat3, asuint(yaxis));
-    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 , asuint(direction));
+    _InstanceData.Store3(instanceOffset, asuint(xaxis * scale.x));
+    _InstanceData.Store3(instanceOffset + sizeFloat3, asuint(yaxis * scale.y));
+    _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 , asuint(direction * scale.z));
     _InstanceData.Store3(instanceOffset + sizeFloat3 + sizeFloat3 + sizeFloat3 , asuint(position));
 }
-
-
-// Hash function  
-uint hash(uint state)  
-{  
-    state ^= 2747636419u;  
-    state *= 2654435769u;  
-    state ^= state >> 16;  
-    state *= 2654435769u;  
-    state ^= state >> 16;  
-    state *= 2654435769u;  
-    return state;  
-}  
-
-// Random float between 0 and 1  
-float random(uint seed)  
-{  
-    return hash(seed) / 4294967295.0; // 2^32 - 1  
-}  
-
 
 //[numthreads(8,8,1)]
 [numthreads(64,1,1)]
 void BulletTransformForBRG (uint3 id : SV_DispatchThreadID)
 {
-    // Use the thread ID and some time value as seed  
-    uint seed = id.x + id.y * 1000 + _TimeDelta * 10000;  
-    //float randomValue = random(seed); 
-    
+    if (_VisibleFlags[id.x] <= 0)
+        return;
+
     uint instanceOffset = GetInstanceOffset(id.x);
-    //float3 position = GetInstancePosition(instanceOffset);
-    
-    SetInstancePosition(instanceOffset, float3((random(seed) - 0.5) * 10.0, 0.0, random(seed + 1.0) * 20.0));
+
+    float3 position = GetInstancePosition(instanceOffset);
+    float3 direction = _Bullets[id.x].direction;
+
+    float moveDistance = _TimeDelta * _BulletSpeed;
+    if (_Bullets[id.x].accumulatedDistance < 1.0)
+    {
+        moveDistance = 1.0; // trail length
+    }
+
+    float3 newPosition = position + direction * moveDistance;
+    SetInstancePosition(instanceOffset, newPosition);
+    _Bullets[id.x].accumulatedDistance += moveDistance;
+
+    if (_Bullets[id.x].accumulatedDistance > 20.0)
+    {
+        _VisibleFlags[id.x] = 0;
+    }
+
+    // // TODO: worldToObject also needs to be recalculated
+}
+
+[numthreads(1,1,1)]
+void BulletTransformForBRG_InitBullets (uint3 id : SV_DispatchThreadID)
+{
+    for (int i = 0, index = 0; i < _InstanceCount; i++)
+    {
+        if (index >= _FireVectorCount)
+            break;
+
+        if (_VisibleFlags[i] <= 0)
+        {
+            float3 direction = _FireVectors[index];
+            _Bullets[i].direction = direction;
+            _Bullets[i].accumulatedDistance = 0.0f;
+            _VisibleFlags[i] = 1;
+            SetInstanceTransform(GetInstanceOffset(i), direction, _PlayerPosition, float3(0.1, 1.0, 1.0));
+            ++index;
+        }
+    }
 }

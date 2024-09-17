@@ -16,15 +16,13 @@ public class BulletShooterBRG : MonoBehaviour
     public int spawnCount = 1000;
     
     public Material bulletMaterial;
-    
-    
-    float fireTimer = 0f;
-    bool isFiring = false;
-    List<Vector3> fireVectors = new List<Vector3>();
+
 
     public ComputeShader bulletTransformComputeShader;
     int m_KernelIndex;
     const string kComputeShaderName = "BulletTransformForBRG";
+    int m_KernelIndex_InitBullets;
+    const string kComputeShaderName_InitBullets = "BulletTransformForBRG_InitBullets";
     
     // For BRG
     BatchRendererGroup m_BRG;
@@ -36,9 +34,33 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMaterialID m_BatchMaterialID;
 
     // instance visible flags
-    bool[] m_InstanceVisibles;
-    int m_VisibleInstanceCount;
-    
+    int[] m_InstanceVisibles;
+    List<int> m_InstanceVisibleIndices;
+    ComputeBuffer m_InstanceVisibleBuffer;
+
+    // bullet data
+    struct Bullet
+    {
+        public Vector3 direction;
+        public float accumulatedDistance;
+
+        public static int Size()
+        {
+            return sizeof(float) * 3 + sizeof(float);
+        }
+    }
+
+    ComputeBuffer m_BulletsBuffer;
+
+    // fire vectors
+    float fireTimer = 0f;
+    bool isFiring = false;
+    const int kFireVectorsMax = 50;
+    int m_FireVectorsCount = 0;
+    Vector3[] m_FireVectors;
+    ComputeBuffer m_FireVectorsBuffer;
+
+
     // Some helper constants to make calculations more convenient.
     const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
     const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
@@ -50,18 +72,18 @@ public class BulletShooterBRG : MonoBehaviour
         var mesh = new Mesh();
         mesh.vertices = new Vector3[]
         {
+            new Vector3(-0.5f, 0, -1f),
+            new Vector3(0.5f, 0, -1f),
             new Vector3(-0.5f, 0, 0),
-            new Vector3(0.5f, 0, 0),
-            new Vector3(-0.5f, 0, 1f),
-            new Vector3(0.5f, 0, 1f)
+            new Vector3(0.5f, 0, 0)
         };
         mesh.triangles = new int[] { 0, 2, 1, 2, 3, 1 };
         mesh.uv = new Vector2[]
         {
-            new Vector2(0, 0),
-            new Vector2(1, 0),
             new Vector2(0, 1),
-            new Vector2(1, 1)
+            new Vector2(1, 1),
+            new Vector2(0, 0),
+            new Vector2(1, 0)
         };
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
@@ -69,13 +91,11 @@ public class BulletShooterBRG : MonoBehaviour
         m_BatchMaterialID = m_BRG.RegisterMaterial(bulletMaterial);
         
         m_KernelIndex = bulletTransformComputeShader.FindKernel(kComputeShaderName);
-        
-        m_InstanceVisibles = new bool[spawnCount];
-        m_VisibleInstanceCount = 0;
+        m_KernelIndex_InitBullets = bulletTransformComputeShader.FindKernel(kComputeShaderName_InitBullets);
 
-        PopulateInstanceData();
+        bulletTransformComputeShader.SetFloat("_BulletSpeed", 5f);
         
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_InstanceData", m_InstanceData);
+        PopulateInstanceData();
     }
 
     void Update()
@@ -101,28 +121,51 @@ public class BulletShooterBRG : MonoBehaviour
             }
         }
 
-        // TODO: fireVectors를 compute shader에 전달 후 fireVectors를 비우기
-        
+        // // Temp
+        // if (Input.GetKeyDown(KeyCode.Space))
+        // {
+        //     bulletTransformComputeShader.Dispatch(m_KernelIndex_InitBullets, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
+        // }
+
+
         bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
+        bulletTransformComputeShader.SetVector("_PlayerPosition", transform.position);
+
+        // TODO: fireVectors를 compute shader에 전달 후 fireVectors를 비우기
+        bulletTransformComputeShader.SetInt("_FireVectorCount", m_FireVectorsCount);
+        if (m_FireVectorsCount > 0)
+        {
+            m_FireVectorsBuffer.SetData(m_FireVectors);
+            bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_FireVectors", m_FireVectorsBuffer);
+            bulletTransformComputeShader.Dispatch(m_KernelIndex_InitBullets, 1, 1, 1);
+            m_FireVectorsCount = 0;
+        }
+
         bulletTransformComputeShader.Dispatch(m_KernelIndex, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
 
-        // TODO: Update instance visible flags from compute shader
+        // Get instance visible flags from compute shader
+        m_InstanceVisibleBuffer.GetData(m_InstanceVisibles);
+        m_InstanceVisibleIndices.Clear();
+        for (int i = 0; i < spawnCount; i++)
+        {
+            if (m_InstanceVisibles[i] > 0)
+                m_InstanceVisibleIndices.Add(i);
+        }
     }
 
     float FireBullet(float fireTimer)
     {
-        var fireCount = Mathf.FloorToInt(fireTimer / fireRate);
+        m_FireVectorsCount = Mathf.Min(Mathf.FloorToInt(fireTimer / fireRate), kFireVectorsMax);
         float remainTime = fireTimer % fireRate;
         float currentTime = Time.time;
 
-        for (int i = 0; i < fireCount; i++)
+        for (int i = 0; i < m_FireVectorsCount; i++)
         {
-            float bulletTime = currentTime - (fireCount - 1 - i) * fireRate;
+            float bulletTime = currentTime - (m_FireVectorsCount - 1 - i) * fireRate;
             float oscillationTime = bulletTime * pingPongSpeed;
             float angle = Mathf.PingPong(oscillationTime, angleRange) - (angleRange / 2f);
             Vector3 direction = Quaternion.Euler(0, angle, 0) * transform.forward;
-
-            //fireVectors.Add(direction);
+            m_FireVectors[i] = direction;
         }
 
         return remainTime;
@@ -145,6 +188,47 @@ public class BulletShooterBRG : MonoBehaviour
     
     void PopulateInstanceData()
     {
+        bulletTransformComputeShader.SetInt("_InstanceCount", spawnCount);
+
+        // Initialize _FireVectors
+        m_FireVectors = new Vector3[kFireVectorsMax];
+        for (int i = 0; i < kFireVectorsMax; i++)
+        {
+            m_FireVectors[i] = Vector3.zero;
+        }
+
+        m_FireVectorsBuffer = new ComputeBuffer(kFireVectorsMax, sizeof(float) * 3);
+        m_FireVectorsBuffer.SetData(m_FireVectors);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_FireVectors", m_FireVectorsBuffer);
+
+
+        // Initialize _Bullets
+        var bullets = new Bullet[spawnCount];
+        for (int i = 0; i < spawnCount; i++)
+        {
+            bullets[i] = new Bullet();
+        }
+        m_BulletsBuffer = new ComputeBuffer(spawnCount, Bullet.Size());
+        m_BulletsBuffer.SetData(bullets);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_Bullets", m_BulletsBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_Bullets", m_BulletsBuffer);
+
+
+        // Initialize _VisibleFlags
+        m_InstanceVisibles = new int[spawnCount];
+        m_InstanceVisibleIndices = new List<int>();
+
+        for (int i = 0; i < spawnCount; i++)
+        {
+            m_InstanceVisibles[i] = 0;
+        }
+
+        m_InstanceVisibleBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        m_InstanceVisibleBuffer.SetData(m_InstanceVisibles);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
+
+
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
         var zero = new Matrix4x4[1] { Matrix4x4.zero };
 
@@ -194,6 +278,9 @@ public class BulletShooterBRG : MonoBehaviour
         m_InstanceData.SetData(objectToWorld, 0, (int)(byteAddressObjectToWorld / Size.kSizeOfPackedMatrix), objectToWorld.Length); // 96 / 48 = 2
         m_InstanceData.SetData(worldToObject, 0, (int)(byteAddressWorldToObject / Size.kSizeOfPackedMatrix), worldToObject.Length); // 240 / 48 = 5
         
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_InstanceData", m_InstanceData);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_InstanceData", m_InstanceData);
+
         // Set up metadata values to point to the instance data. Set the most significant bit 0x80000000 in each
         // which instructs the shader that the data is an array with one value per instance, indexed by the instance index.
         // Any metadata values that the shader uses that are not set here will be 0. When a value of 0 is used with
@@ -221,7 +308,24 @@ public class BulletShooterBRG : MonoBehaviour
     {
         m_BRG.Dispose();
         m_InstanceData.Dispose();
-        
+
+        if (m_BulletsBuffer != null)
+        {
+            m_BulletsBuffer.Release();
+            m_BulletsBuffer = null;
+        }
+
+        if (m_InstanceVisibleBuffer != null)
+        {
+            m_InstanceVisibleBuffer.Release();
+            m_InstanceVisibleBuffer = null;
+        }
+
+        if (m_FireVectorsBuffer != null)
+        {
+            m_FireVectorsBuffer.Release();
+            m_FireVectorsBuffer = null;
+        }
     }
 
     unsafe JobHandle OnPerformCulling(
@@ -250,8 +354,10 @@ public class BulletShooterBRG : MonoBehaviour
         drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
         
         // TODO: m_VisibleInstanceCount를 사용하여 drawCommands->visibleInstanceCount 초기화
-        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(spawnCount * sizeof(int), alignment, Allocator.TempJob);
-        drawCommands->visibleInstanceCount = spawnCount;
+        //drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(spawnCount * sizeof(int), alignment, Allocator.TempJob);
+        //drawCommands->visibleInstanceCount = spawnCount;
+        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(m_InstanceVisibleIndices.Count * sizeof(int), alignment, Allocator.TempJob);
+        drawCommands->visibleInstanceCount = m_InstanceVisibleIndices.Count;
 
         drawCommands->drawCommandPickingInstanceIDs = null;
         drawCommands->drawCommandCount = 1;
@@ -265,7 +371,8 @@ public class BulletShooterBRG : MonoBehaviour
         // starting from offset 0 in the array, using the batch, material and mesh
         // IDs registered in the Start() method. It doesn't set any special flags.
         drawCommands->drawCommands[0].visibleOffset = 0;
-        drawCommands->drawCommands[0].visibleCount = (uint)spawnCount;  // TODO: m_VisibleInstanceCount를 사용하여 초기화
+        //drawCommands->drawCommands[0].visibleCount = (uint)spawnCount;  // TODO: m_VisibleInstanceCount를 사용하여 초기화
+        drawCommands->drawCommands[0].visibleCount = (uint)m_InstanceVisibleIndices.Count;
         drawCommands->drawCommands[0].batchID = m_BatchID;
         drawCommands->drawCommands[0].materialID = m_BatchMaterialID;
         drawCommands->drawCommands[0].meshID = m_BatchMeshID;
@@ -289,8 +396,12 @@ public class BulletShooterBRG : MonoBehaviour
         // assumes that everything is visible.
 
         // TODO: m_InstanceVisibles를 사용하여 drawCommands->visibleInstances 초기화
-        for (int i = 0; i < spawnCount; ++i)
-            drawCommands->visibleInstances[i] = i;
+        // for (int i = 0; i < spawnCount; ++i)
+        //     drawCommands->visibleInstances[i] = i;
+        for (int i = 0; i < m_InstanceVisibleIndices.Count; i++)
+        {
+            drawCommands->visibleInstances[i] = m_InstanceVisibleIndices[i];
+        }
         
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
