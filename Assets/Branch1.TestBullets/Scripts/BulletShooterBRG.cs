@@ -15,6 +15,9 @@ public class BulletShooterBRG : MonoBehaviour
     public float pingPongSpeed = 2f; // Ping Pong 속도
     public int spawnCount = 1000;
     
+    [SerializeField, ReadOnly]
+    int bulletCount = 0;
+
     public Material bulletMaterial;
 
 
@@ -121,13 +124,6 @@ public class BulletShooterBRG : MonoBehaviour
             }
         }
 
-        // // Temp
-        // if (Input.GetKeyDown(KeyCode.Space))
-        // {
-        //     bulletTransformComputeShader.Dispatch(m_KernelIndex_InitBullets, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
-        // }
-
-
         bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
         bulletTransformComputeShader.SetVector("_PlayerPosition", transform.position);
 
@@ -151,6 +147,8 @@ public class BulletShooterBRG : MonoBehaviour
             if (m_InstanceVisibles[i] > 0)
                 m_InstanceVisibleIndices.Add(i);
         }
+
+        bulletCount = m_InstanceVisibleIndices.Count;
     }
 
     float FireBullet(float fireTimer)
