@@ -39,6 +39,7 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMaterialID m_BatchMaterialID;
 
     // instance visible flags
+    int[] m_InstanceVisible;
     ComputeBuffer m_InstanceVisibleBuffer;
     int[] m_InstanceVisibleCount;
     ComputeBuffer m_InstanceVisibleCountBuffer;
@@ -147,6 +148,10 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.Dispatch(m_KernelIndex_GetVisibleInstanceCount, 1, 1, 1);
         m_InstanceVisibleCountBuffer.GetData(m_InstanceVisibleCount);
         bulletCount = m_InstanceVisibleCount[0];
+
+
+        // test
+        m_InstanceVisibleBuffer.GetData(m_InstanceVisible);
     }
 
     float FireBullet(float fireTimer)
@@ -217,6 +222,8 @@ public class BulletShooterBRG : MonoBehaviour
         {
             instanceVisibles[i] = 0;
         }
+
+        m_InstanceVisible = new int[spawnCount];
 
         m_InstanceVisibleBuffer = new ComputeBuffer(spawnCount, sizeof(int));
         m_InstanceVisibleBuffer.SetData(instanceVisibles);
@@ -404,11 +411,20 @@ public class BulletShooterBRG : MonoBehaviour
         // assumes that everything is visible.
 
         // Simple traversal to extract visible index from visibleFlog
-        for (int i = 0; i < visibleInstanceCount; i++)
-        {
-            drawCommands->visibleInstances[i] = i;
-        }
+        // for (int i = 0; i < visibleInstanceCount; i++)
+        // {
+        //     drawCommands->visibleInstances[i] = i;
+        // }
 
+        // test
+        for (int i = 0, index = 0; i < spawnCount; i++)
+        {
+            if (m_InstanceVisible[i] > 0)
+            {
+                drawCommands->visibleInstances[index++] = i;
+            }
+        }
+        
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
         // culling and draw command output. In this case, this function would return a

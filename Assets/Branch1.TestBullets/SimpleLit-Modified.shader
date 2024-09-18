@@ -134,7 +134,7 @@ Shader "Universal Render Pipeline/Simple Lit - Modified"
             //--------------------------------------
             // Defines
             #define BUMP_SCALE_NOT_SUPPORTED 1
-            #define UNITY_DOTS_INSTANCING_FAKE_TEST 1
+            //#define UNITY_DOTS_INSTANCING_FAKE_TEST 1
 
             // -------------------------------------
             // Includes
