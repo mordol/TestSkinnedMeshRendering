@@ -192,31 +192,13 @@
 
 //ByteAddressBuffer unity_DOTSInstanceData;
 StructuredBuffer<int> _VisibleFlags;
+int _VisibleFlagsCount;
 #endif
 
 
 #if UNITY_ANY_INSTANCING_ENABLED
     void UnitySetupInstanceID(uint inputInstanceID)
     {
-        #if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
-            // Extract visible instanceIDs in order
-            for (int i = 0; i < _VisibleFlags.Length; i++)
-            {
-                if (_VisibleFlags[i] > 0)
-                {
-                    if (inputInstanceID == 0)
-                    {
-                        inputInstanceID = i;
-                        break;
-                    }
-                    
-                    inputInstanceID--;
-                }
-            }
-
-        #endif
-
-
 		#if defined(UNITY_SUPPORT_INSTANCING) && defined(DOTS_INSTANCING_ON)
             const int localBaseInstanceId = 0;		// base instance id is always 0 in BRG (avoid using useless UnityDrawCallInfo cbuffer)
 		#else
@@ -248,6 +230,25 @@ StructuredBuffer<int> _VisibleFlags;
             unity_InstanceID = InstanceIndex() - localBaseInstanceId;
         #else
             unity_InstanceID = inputInstanceID + localBaseInstanceId;
+        #endif
+
+        // Extract visible instanceIDs in order
+        #if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
+            int visibleInstanceID = unity_InstanceID;
+            for (int i = 0; i < _VisibleFlagsCount; i++)
+            {
+                if (_VisibleFlags[i] > 0)
+                {
+                    if (visibleInstanceID == 0)
+                    {
+                        visibleInstanceID = i;
+                        break;
+                    }
+                    
+                    visibleInstanceID--;
+                }
+            }
+            unity_InstanceID = max(0, visibleInstanceID);
         #endif
     }
 

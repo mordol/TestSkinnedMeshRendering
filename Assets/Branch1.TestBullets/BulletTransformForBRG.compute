@@ -74,21 +74,25 @@ void BulletTransformForBRG (uint3 id : SV_DispatchThreadID)
 
     float3 position = GetInstancePosition(instanceOffset);
     float3 direction = _Bullets[id.x].direction;
+    float accumulatedDistance = _Bullets[id.x].accumulatedDistance;
 
     float moveDistance = _TimeDelta * _BulletSpeed;
-    if (_Bullets[id.x].accumulatedDistance < 1.0)
+    if (accumulatedDistance < 1.0)
     {
         moveDistance = 1.0; // trail length
     }
 
     float3 newPosition = position + direction * moveDistance;
     SetInstancePosition(instanceOffset, newPosition);
-    _Bullets[id.x].accumulatedDistance += moveDistance;
 
-    if (_Bullets[id.x].accumulatedDistance > 20.0)
+    accumulatedDistance += moveDistance;
+    if (accumulatedDistance > 20.0)
     {
         _VisibleFlags[id.x] = 0;
+        accumulatedDistance = 0.0;
     }
+
+    _Bullets[id.x].accumulatedDistance = accumulatedDistance;
 
     // TODO: worldToObject also needs to be recalculated
 }
@@ -105,7 +109,7 @@ void BulletTransformForBRG_InitBullets (uint3 id : SV_DispatchThreadID)
         {
             float3 direction = _FireVectors[index];
             _Bullets[i].direction = direction;
-            _Bullets[i].accumulatedDistance = 0.0f;
+            _Bullets[i].accumulatedDistance = 0.0;
             _VisibleFlags[i] = 1;
             SetInstanceTransform(GetInstanceOffset(i), direction, _PlayerPosition, float3(0.1, 1.0, 1.0));
             ++index;

@@ -224,6 +224,7 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletMaterial.SetBuffer("_VisibleFlags", m_InstanceVisibleBuffer);
+        bulletMaterial.SetInt("_VisibleFlagsCount", spawnCount);
 
         // Initialize _VisibleCount
         m_InstanceVisibleCountBuffer = new ComputeBuffer(1, sizeof(int));
@@ -407,7 +408,7 @@ public class BulletShooterBRG : MonoBehaviour
         {
             drawCommands->visibleInstances[i] = i;
         }
-        
+
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
         // culling and draw command output. In this case, this function would return a
