@@ -393,13 +393,19 @@ public class BulletShooterBRG : MonoBehaviour
         // implementation, this output would depend on what is visible, but this example
         // assumes that everything is visible.
 
-        // TODO: m_InstanceVisibles를 사용하여 drawCommands->visibleInstances 초기화
         // for (int i = 0; i < spawnCount; ++i)
         //     drawCommands->visibleInstances[i] = i;
+
         for (int i = 0; i < m_InstanceVisibleIndices.Count; i++)
         {
             drawCommands->visibleInstances[i] = m_InstanceVisibleIndices[i];
         }
+
+        // for (int i = 0; i < m_InstanceVisibleIndices.Count; i++)
+        // {
+        //     drawCommands->visibleInstances[i] = m_InstanceVisibleIndices[0];
+        // }
+
         
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
