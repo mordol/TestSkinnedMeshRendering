@@ -1,6 +1,7 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel BulletTransformForBRG
 #pragma kernel BulletTransformForBRG_InitBullets
+#pragma kernel BulletTransformForBRG_GetVisibleInstanceCount
 
 // For instance data (BRG SSBO)
 RWByteAddressBuffer _InstanceData;
@@ -15,6 +16,7 @@ RWStructuredBuffer<Bullet> _Bullets;
 
 // Bullet visible flags
 RWStructuredBuffer<int> _VisibleFlags;
+RWStructuredBuffer<int> _VisibleCount;  // 1 element
 
 RWStructuredBuffer<float3> _FireVectors;
 
@@ -88,7 +90,7 @@ void BulletTransformForBRG (uint3 id : SV_DispatchThreadID)
         _VisibleFlags[id.x] = 0;
     }
 
-    // // TODO: worldToObject also needs to be recalculated
+    // TODO: worldToObject also needs to be recalculated
 }
 
 [numthreads(1,1,1)]
@@ -109,4 +111,19 @@ void BulletTransformForBRG_InitBullets (uint3 id : SV_DispatchThreadID)
             ++index;
         }
     }
+}
+
+[numthreads(1,1,1)]
+void BulletTransformForBRG_GetVisibleInstanceCount(uint3 id : SV_DispatchThreadID)
+{
+    int count = 0;
+    for (int i = 0; i < _InstanceCount; i++)
+    {
+        if (_VisibleFlags[i] > 0)
+        {
+            ++count;
+        }
+    }
+
+    _VisibleCount[0] = count;
 }

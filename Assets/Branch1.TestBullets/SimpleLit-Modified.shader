@@ -134,19 +134,11 @@ Shader "Universal Render Pipeline/Simple Lit - Modified"
             //--------------------------------------
             // Defines
             #define BUMP_SCALE_NOT_SUPPORTED 1
+            #define UNITY_DOTS_INSTANCING_FAKE_TEST 1
 
             // -------------------------------------
             // Includes
             #include "Packages/com.unity.render-pipelines.universal/Shaders/SimpleLitInput.hlsl"
-
-            // //(test) Modify visible instance index
-            // #if defined(UNITY_DOTS_INSTANCING_ENABLED)
-                
-            //     //SetDOTSVisibleData(unity_DOTSVisibleInstances[unity_InstanceID]);
-            //     //SetDOTSVisibleData(unity_DOTSVisibleInstances[0]);
-            //     unity_SampledDOTSVisibleData = unity_DOTSVisibleInstances[0];
-            // #endif
-
             #include "Packages/com.unity.render-pipelines.universal/Shaders/SimpleLitForwardPass.hlsl"
             ENDHLSL
         }

@@ -185,9 +185,38 @@
 //                                  Also procedural function is called to setup instance data.
 // - UNITY_TRANSFER_INSTANCE_ID     Copy instance ID from input struct to output struct. Used in vertex shader.
 
+#if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
+// In compute shader
+//RWStructuredBuffer<int> _VisibleFlags;
+//RWByteAddressBuffer _InstanceData;
+
+//ByteAddressBuffer unity_DOTSInstanceData;
+StructuredBuffer<int> _VisibleFlags;
+#endif
+
+
 #if UNITY_ANY_INSTANCING_ENABLED
     void UnitySetupInstanceID(uint inputInstanceID)
     {
+        #if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
+            // Extract visible instanceIDs in order
+            for (int i = 0; i < _VisibleFlags.Length; i++)
+            {
+                if (_VisibleFlags[i] > 0)
+                {
+                    if (inputInstanceID == 0)
+                    {
+                        inputInstanceID = i;
+                        break;
+                    }
+                    
+                    inputInstanceID--;
+                }
+            }
+
+        #endif
+
+
 		#if defined(UNITY_SUPPORT_INSTANCING) && defined(DOTS_INSTANCING_ON)
             const int localBaseInstanceId = 0;		// base instance id is always 0 in BRG (avoid using useless UnityDrawCallInfo cbuffer)
 		#else

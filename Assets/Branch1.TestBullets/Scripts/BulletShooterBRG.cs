@@ -26,6 +26,8 @@ public class BulletShooterBRG : MonoBehaviour
     const string kComputeShaderName = "BulletTransformForBRG";
     int m_KernelIndex_InitBullets;
     const string kComputeShaderName_InitBullets = "BulletTransformForBRG_InitBullets";
+    int m_KernelIndex_GetVisibleInstanceCount;
+    const string kComputeShaderName_GetVisibleInstanceCount = "BulletTransformForBRG_GetVisibleInstanceCount";
     
     // For BRG
     BatchRendererGroup m_BRG;
@@ -37,9 +39,9 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMaterialID m_BatchMaterialID;
 
     // instance visible flags
-    int[] m_InstanceVisibles;
-    List<int> m_InstanceVisibleIndices;
     ComputeBuffer m_InstanceVisibleBuffer;
+    int[] m_InstanceVisibleCount;
+    ComputeBuffer m_InstanceVisibleCountBuffer;
 
     // bullet data
     struct Bullet
@@ -95,7 +97,8 @@ public class BulletShooterBRG : MonoBehaviour
         
         m_KernelIndex = bulletTransformComputeShader.FindKernel(kComputeShaderName);
         m_KernelIndex_InitBullets = bulletTransformComputeShader.FindKernel(kComputeShaderName_InitBullets);
-
+        m_KernelIndex_GetVisibleInstanceCount = bulletTransformComputeShader.FindKernel(kComputeShaderName_GetVisibleInstanceCount);
+        
         bulletTransformComputeShader.SetFloat("_BulletSpeed", 5f);
         
         PopulateInstanceData();
@@ -127,7 +130,7 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
         bulletTransformComputeShader.SetVector("_PlayerPosition", transform.position);
 
-        // TODO: fireVectors를 compute shader에 전달 후 fireVectors를 비우기
+        // Update fire
         bulletTransformComputeShader.SetInt("_FireVectorCount", m_FireVectorsCount);
         if (m_FireVectorsCount > 0)
         {
@@ -137,18 +140,13 @@ public class BulletShooterBRG : MonoBehaviour
             m_FireVectorsCount = 0;
         }
 
+        // Update bullets
         bulletTransformComputeShader.Dispatch(m_KernelIndex, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
 
-        // Get instance visible flags from compute shader
-        m_InstanceVisibleBuffer.GetData(m_InstanceVisibles);
-        m_InstanceVisibleIndices.Clear();
-        for (int i = 0; i < spawnCount; i++)
-        {
-            if (m_InstanceVisibles[i] > 0)
-                m_InstanceVisibleIndices.Add(i);
-        }
-
-        bulletCount = m_InstanceVisibleIndices.Count;
+        // Get visible instance count from compute shader
+        bulletTransformComputeShader.Dispatch(m_KernelIndex_GetVisibleInstanceCount, 1, 1, 1);
+        m_InstanceVisibleCountBuffer.GetData(m_InstanceVisibleCount);
+        bulletCount = m_InstanceVisibleCount[0];
     }
 
     float FireBullet(float fireTimer)
@@ -206,6 +204,7 @@ public class BulletShooterBRG : MonoBehaviour
         {
             bullets[i] = new Bullet();
         }
+
         m_BulletsBuffer = new ComputeBuffer(spawnCount, Bullet.Size());
         m_BulletsBuffer.SetData(bullets);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_Bullets", m_BulletsBuffer);
@@ -213,18 +212,24 @@ public class BulletShooterBRG : MonoBehaviour
 
 
         // Initialize _VisibleFlags
-        m_InstanceVisibles = new int[spawnCount];
-        m_InstanceVisibleIndices = new List<int>();
-
+        var instanceVisibles = new int[spawnCount];
         for (int i = 0; i < spawnCount; i++)
         {
-            m_InstanceVisibles[i] = 0;
+            instanceVisibles[i] = 0;
         }
 
         m_InstanceVisibleBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        m_InstanceVisibleBuffer.SetData(m_InstanceVisibles);
+        m_InstanceVisibleBuffer.SetData(instanceVisibles);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleFlags", m_InstanceVisibleBuffer);
+        bulletMaterial.SetBuffer("_VisibleFlags", m_InstanceVisibleBuffer);
+
+        // Initialize _VisibleCount
+        m_InstanceVisibleCountBuffer = new ComputeBuffer(1, sizeof(int));
+        m_InstanceVisibleCount = new int[1] { 0 };
+        m_InstanceVisibleCountBuffer.SetData(m_InstanceVisibleCount);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
 
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
@@ -319,6 +324,12 @@ public class BulletShooterBRG : MonoBehaviour
             m_InstanceVisibleBuffer = null;
         }
 
+        if (m_InstanceVisibleCountBuffer != null)
+        {
+            m_InstanceVisibleCountBuffer.Release();
+            m_InstanceVisibleCountBuffer = null;
+        }
+
         if (m_FireVectorsBuffer != null)
         {
             m_FireVectorsBuffer.Release();
@@ -332,6 +343,8 @@ public class BulletShooterBRG : MonoBehaviour
         BatchCullingOutput cullingOutput,
         IntPtr userContext)
     {
+        var visibleInstanceCount = m_InstanceVisibleCount[0];
+
         // UnsafeUtility.Malloc() requires an alignment, so use the largest integer type's alignment
         // which is a reasonable default.
         int alignment = UnsafeUtility.AlignOf<long>();
@@ -351,11 +364,8 @@ public class BulletShooterBRG : MonoBehaviour
         drawCommands->drawCommands = (BatchDrawCommand*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawCommand>(), alignment, Allocator.TempJob);
         drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
         
-        // TODO: m_VisibleInstanceCount를 사용하여 drawCommands->visibleInstanceCount 초기화
-        //drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(spawnCount * sizeof(int), alignment, Allocator.TempJob);
-        //drawCommands->visibleInstanceCount = spawnCount;
-        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(m_InstanceVisibleIndices.Count * sizeof(int), alignment, Allocator.TempJob);
-        drawCommands->visibleInstanceCount = m_InstanceVisibleIndices.Count;
+        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(visibleInstanceCount * sizeof(int), alignment, Allocator.TempJob);
+        drawCommands->visibleInstanceCount = visibleInstanceCount;
 
         drawCommands->drawCommandPickingInstanceIDs = null;
         drawCommands->drawCommandCount = 1;
@@ -369,8 +379,7 @@ public class BulletShooterBRG : MonoBehaviour
         // starting from offset 0 in the array, using the batch, material and mesh
         // IDs registered in the Start() method. It doesn't set any special flags.
         drawCommands->drawCommands[0].visibleOffset = 0;
-        //drawCommands->drawCommands[0].visibleCount = (uint)spawnCount;  // TODO: m_VisibleInstanceCount를 사용하여 초기화
-        drawCommands->drawCommands[0].visibleCount = (uint)m_InstanceVisibleIndices.Count;
+        drawCommands->drawCommands[0].visibleCount = (uint)visibleInstanceCount;
         drawCommands->drawCommands[0].batchID = m_BatchID;
         drawCommands->drawCommands[0].materialID = m_BatchMaterialID;
         drawCommands->drawCommands[0].meshID = m_BatchMeshID;
@@ -393,19 +402,11 @@ public class BulletShooterBRG : MonoBehaviour
         // implementation, this output would depend on what is visible, but this example
         // assumes that everything is visible.
 
-        // for (int i = 0; i < spawnCount; ++i)
-        //     drawCommands->visibleInstances[i] = i;
-
-        for (int i = 0; i < m_InstanceVisibleIndices.Count; i++)
+        // Simple traversal to extract visible index from visibleFlog
+        for (int i = 0; i < visibleInstanceCount; i++)
         {
-            drawCommands->visibleInstances[i] = m_InstanceVisibleIndices[i];
+            drawCommands->visibleInstances[i] = i;
         }
-
-        // for (int i = 0; i < m_InstanceVisibleIndices.Count; i++)
-        // {
-        //     drawCommands->visibleInstances[i] = m_InstanceVisibleIndices[0];
-        // }
-
         
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
