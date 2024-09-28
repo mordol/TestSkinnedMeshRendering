@@ -39,8 +39,9 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMaterialID m_BatchMaterialID;
 
     // instance visible flags
-    int[] m_InstanceVisible;
     ComputeBuffer m_InstanceVisibleBuffer;
+    int[] m_InstanceVisibleOnlyFlags;
+    ComputeBuffer m_InstanceVisibleOnlyFlagsBuffer;
     int[] m_InstanceVisibleCount;
     ComputeBuffer m_InstanceVisibleCountBuffer;
 
@@ -146,12 +147,9 @@ public class BulletShooterBRG : MonoBehaviour
 
         // Get visible instance count from compute shader
         bulletTransformComputeShader.Dispatch(m_KernelIndex_GetVisibleInstanceCount, 1, 1, 1);
+        m_InstanceVisibleOnlyFlagsBuffer.GetData(m_InstanceVisibleOnlyFlags);
         m_InstanceVisibleCountBuffer.GetData(m_InstanceVisibleCount);
-        bulletCount = m_InstanceVisibleCount[0];
-
-
-        // test
-        m_InstanceVisibleBuffer.GetData(m_InstanceVisible);
+        bulletCount = m_InstanceVisibleCount[0];        
     }
 
     float FireBullet(float fireTimer)
@@ -217,27 +215,23 @@ public class BulletShooterBRG : MonoBehaviour
 
 
         // Initialize _VisibleFlags
-        var instanceVisibles = new int[spawnCount];
-        for (int i = 0; i < spawnCount; i++)
-        {
-            instanceVisibles[i] = 0;
-        }
-
-        m_InstanceVisible = new int[spawnCount];
-
         m_InstanceVisibleBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        m_InstanceVisibleBuffer.SetData(instanceVisibles);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletMaterial.SetBuffer("_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletMaterial.SetInt("_VisibleFlagsCount", spawnCount);
+        
+        // Initialize _VisibleOnlyFlags
+        m_InstanceVisibleOnlyFlags = new int[spawnCount];
+        m_InstanceVisibleOnlyFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
+        bulletMaterial.SetBuffer("_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
 
         // Initialize _VisibleCount
         m_InstanceVisibleCountBuffer = new ComputeBuffer(1, sizeof(int));
         m_InstanceVisibleCount = new int[1] { 0 };
-        m_InstanceVisibleCountBuffer.SetData(m_InstanceVisibleCount);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
+        bulletMaterial.SetInt("_VisibleFlagsCount", 0);
 
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
@@ -332,6 +326,12 @@ public class BulletShooterBRG : MonoBehaviour
             m_InstanceVisibleBuffer = null;
         }
 
+        if (m_InstanceVisibleOnlyFlagsBuffer != null)
+        {
+            m_InstanceVisibleOnlyFlagsBuffer.Release();
+            m_InstanceVisibleOnlyFlagsBuffer = null;
+        }
+
         if (m_InstanceVisibleCountBuffer != null)
         {
             m_InstanceVisibleCountBuffer.Release();
@@ -411,18 +411,9 @@ public class BulletShooterBRG : MonoBehaviour
         // assumes that everything is visible.
 
         // Simple traversal to extract visible index from visibleFlog
-        // for (int i = 0; i < visibleInstanceCount; i++)
-        // {
-        //     drawCommands->visibleInstances[i] = i;
-        // }
-
-        // test
-        for (int i = 0, index = 0; i < spawnCount; i++)
+        for (int i = 0; i < visibleInstanceCount; i++)
         {
-            if (m_InstanceVisible[i] > 0)
-            {
-                drawCommands->visibleInstances[index++] = i;
-            }
+            drawCommands->visibleInstances[i] = m_InstanceVisibleOnlyFlags[i];
         }
         
         // This example doesn't use jobs, so it can return an empty JobHandle.
