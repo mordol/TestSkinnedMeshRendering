@@ -16,6 +16,8 @@ RWStructuredBuffer<Bullet> _Bullets;
 
 // Bullet visible flags
 RWStructuredBuffer<int> _VisibleFlags;
+
+RWStructuredBuffer<int> _VisibleOnlyFlags;
 RWStructuredBuffer<int> _VisibleCount;  // 1 element
 
 RWStructuredBuffer<float3> _FireVectors;
@@ -125,7 +127,7 @@ void BulletTransformForBRG_GetVisibleInstanceCount(uint3 id : SV_DispatchThreadI
     {
         if (_VisibleFlags[i] > 0)
         {
-            ++count;
+            _VisibleOnlyFlags[count++] = i;
         }
     }
 

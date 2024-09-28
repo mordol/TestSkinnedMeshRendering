@@ -40,6 +40,7 @@ public class BulletShooterBRG : MonoBehaviour
 
     // instance visible flags
     ComputeBuffer m_InstanceVisibleBuffer;
+    ComputeBuffer m_InstanceVisibleOnlyFlagsBuffer;
     int[] m_InstanceVisibleCount;
     ComputeBuffer m_InstanceVisibleCountBuffer;
 
@@ -223,14 +224,19 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletMaterial.SetBuffer("_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletMaterial.SetInt("_VisibleFlagsCount", spawnCount);
+
+        // Initialize _VisibleOnlyFlags
+        m_InstanceVisibleOnlyFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        m_InstanceVisibleOnlyFlagsBuffer.SetData(instanceVisibles);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
+        bulletMaterial.SetBuffer("_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
 
         // Initialize _VisibleCount
         m_InstanceVisibleCountBuffer = new ComputeBuffer(1, sizeof(int));
         m_InstanceVisibleCount = new int[1] { 0 };
         m_InstanceVisibleCountBuffer.SetData(m_InstanceVisibleCount);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
+        bulletMaterial.SetInt("_VisibleFlagsCount", 0);
 
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
@@ -323,6 +329,12 @@ public class BulletShooterBRG : MonoBehaviour
         {
             m_InstanceVisibleBuffer.Release();
             m_InstanceVisibleBuffer = null;
+        }
+
+        if (m_InstanceVisibleOnlyFlagsBuffer != null)
+        {
+            m_InstanceVisibleOnlyFlagsBuffer.Release();
+            m_InstanceVisibleOnlyFlagsBuffer = null;
         }
 
         if (m_InstanceVisibleCountBuffer != null)

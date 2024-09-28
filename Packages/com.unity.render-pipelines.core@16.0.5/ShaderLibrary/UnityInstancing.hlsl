@@ -186,12 +186,7 @@
 // - UNITY_TRANSFER_INSTANCE_ID     Copy instance ID from input struct to output struct. Used in vertex shader.
 
 #if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
-// In compute shader
-//RWStructuredBuffer<int> _VisibleFlags;
-//RWByteAddressBuffer _InstanceData;
-
-//ByteAddressBuffer unity_DOTSInstanceData;
-StructuredBuffer<int> _VisibleFlags;
+StructuredBuffer<int> _VisibleOnlyFlags;
 int _VisibleFlagsCount;
 #endif
 
@@ -234,21 +229,7 @@ int _VisibleFlagsCount;
 
         // Extract visible instanceIDs in order
         #if defined(UNITY_DOTS_INSTANCING_FAKE_TEST)
-            int visibleInstanceID = unity_InstanceID;
-            for (int i = 0; i < _VisibleFlagsCount; i++)
-            {
-                if (_VisibleFlags[i] > 0)
-                {
-                    if (visibleInstanceID == 0)
-                    {
-                        visibleInstanceID = i;
-                        break;
-                    }
-                    
-                    visibleInstanceID--;
-                }
-            }
-            unity_InstanceID = max(0, visibleInstanceID);
+            unity_InstanceID = _VisibleOnlyFlags[unity_InstanceID];
         #endif
     }
 
