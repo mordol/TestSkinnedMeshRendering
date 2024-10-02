@@ -14,6 +14,7 @@ public class BulletShooterBRG : MonoBehaviour
     public float angleRange = 60f; // 총알이 발사되는 각도 범위
     public float pingPongSpeed = 2f; // Ping Pong 속도
     public int spawnCount = 1000;
+    public bool autoFire = false;
     
     [SerializeField, ReadOnly]
     int bulletCount = 0;
@@ -67,11 +68,18 @@ public class BulletShooterBRG : MonoBehaviour
     Vector3[] m_FireVectors;
     ComputeBuffer m_FireVectorsBuffer;
 
+    // frustum planes
+    private Camera mainCamera;
+    private Plane[] m_FrustumPlanes = new Plane[6];
+    private Vector4[] m_FrustumPlanesArray = new Vector4[6];
+    private ComputeBuffer m_FrustumPlanesBuffer;
+
 
     // Some helper constants to make calculations more convenient.
     const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
     const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
     
+
     void Start()
     {
         m_BRG = new BatchRendererGroup(OnPerformCulling, IntPtr.Zero);
@@ -103,6 +111,8 @@ public class BulletShooterBRG : MonoBehaviour
         
         bulletTransformComputeShader.SetFloat("_BulletSpeed", 5f);
         
+        mainCamera = Camera.main;
+        
         PopulateInstanceData();
     }
 
@@ -119,7 +129,7 @@ public class BulletShooterBRG : MonoBehaviour
             isFiring = false;
         }
 
-        if (isFiring)
+        if (isFiring || autoFire)
         {
             fireTimer += Time.deltaTime;
 
@@ -131,6 +141,14 @@ public class BulletShooterBRG : MonoBehaviour
 
         bulletTransformComputeShader.SetFloat("_TimeDelta", Time.deltaTime);
         bulletTransformComputeShader.SetVector("_PlayerPosition", transform.position);
+
+        // Update frustum planes
+        GeometryUtility.CalculateFrustumPlanes(mainCamera, m_FrustumPlanes);
+        for (int i = 0; i < 6; i++)
+        {
+            m_FrustumPlanesArray[i].Set(m_FrustumPlanes[i].normal.x, m_FrustumPlanes[i].normal.y, m_FrustumPlanes[i].normal.z, m_FrustumPlanes[i].distance);
+        }
+        m_FrustumPlanesBuffer.SetData(m_FrustumPlanesArray);
 
         // Update fire
         bulletTransformComputeShader.SetInt("_FireVectorCount", m_FireVectorsCount);
@@ -232,6 +250,15 @@ public class BulletShooterBRG : MonoBehaviour
         m_InstanceVisibleCount = new int[1] { 0 };
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
         bulletMaterial.SetInt("_VisibleFlagsCount", 0);
+
+
+        m_FrustumPlanesBuffer = new ComputeBuffer(6, sizeof(float) * 4);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_FrustumPlanes", m_FrustumPlanesBuffer);
+
+        // Initialize _NotCulledFlags
+        var notCulledFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_NotCulledFlags", notCulledFlagsBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_NotCulledFlags", notCulledFlagsBuffer);
 
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
@@ -342,6 +369,12 @@ public class BulletShooterBRG : MonoBehaviour
         {
             m_FireVectorsBuffer.Release();
             m_FireVectorsBuffer = null;
+        }
+
+        if (m_FrustumPlanesBuffer != null)
+        {
+            m_FrustumPlanesBuffer.Release();
+            m_FrustumPlanesBuffer = null;
         }
     }
 

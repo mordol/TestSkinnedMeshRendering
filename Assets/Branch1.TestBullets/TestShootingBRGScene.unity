@@ -167,6 +167,8 @@ MonoBehaviour:
   angleRange: 60
   pingPongSpeed: 300
   spawnCount: 1000
+  autoFire: 1
+  bulletCount: 0
   bulletMaterial: {fileID: 2100000, guid: 4e1e2ee28113cb64d949db51d3e3a3ae, type: 2}
   bulletTransformComputeShader: {fileID: 7200000, guid: 80a2b1f99cb1b21498e4d98a7f46029c,
     type: 3}
