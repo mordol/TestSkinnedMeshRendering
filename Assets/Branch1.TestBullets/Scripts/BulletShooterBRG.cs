@@ -68,11 +68,12 @@ public class BulletShooterBRG : MonoBehaviour
     Vector3[] m_FireVectors;
     ComputeBuffer m_FireVectorsBuffer;
 
-    // frustum planes
+    // Culling
     private Camera mainCamera;
     private Plane[] m_FrustumPlanes = new Plane[6];
     private Vector4[] m_FrustumPlanesArray = new Vector4[6];
     private ComputeBuffer m_FrustumPlanesBuffer;
+    private ComputeBuffer m_NotCulledFlagsBuffer;
 
 
     // Some helper constants to make calculations more convenient.
@@ -251,14 +252,14 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
         bulletMaterial.SetInt("_VisibleFlagsCount", 0);
 
-
+        // Initialize _FrustumPlanes
         m_FrustumPlanesBuffer = new ComputeBuffer(6, sizeof(float) * 4);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_FrustumPlanes", m_FrustumPlanesBuffer);
 
         // Initialize _NotCulledFlags
-        var notCulledFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_NotCulledFlags", notCulledFlagsBuffer);
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_NotCulledFlags", notCulledFlagsBuffer);
+        m_NotCulledFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_NotCulledFlags", m_NotCulledFlagsBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_NotCulledFlags", m_NotCulledFlagsBuffer);
 
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
@@ -375,6 +376,12 @@ public class BulletShooterBRG : MonoBehaviour
         {
             m_FrustumPlanesBuffer.Release();
             m_FrustumPlanesBuffer = null;
+        }
+
+        if (m_NotCulledFlagsBuffer != null)
+        {
+            m_NotCulledFlagsBuffer.Release();
+            m_NotCulledFlagsBuffer = null;
         }
     }
 
