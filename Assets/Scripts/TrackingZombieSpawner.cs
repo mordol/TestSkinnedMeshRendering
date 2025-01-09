@@ -425,6 +425,7 @@ public class TrackingZombieSpawner : MonoBehaviour
         
         // Configure the single draw range to cover the single draw command which
         // is at offset 0.
+        drawCommands->drawRanges[0].drawCommandsType = BatchDrawCommandType.Direct;
         drawCommands->drawRanges[0].drawCommandsBegin = 0;
         drawCommands->drawRanges[0].drawCommandsCount = (ushort)drawCommnadsCount;
 
