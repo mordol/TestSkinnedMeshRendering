@@ -565,14 +565,6 @@ MonoBehaviour:
   - {fileID: -2308179252515921629}
   - {fileID: 4480509866244675186}
   - {fileID: 5006615722764375336}
-  - {fileID: 2977045824459699541}
-  - {fileID: 4529411073392866232}
-  - {fileID: 494137824406998379}
-  - {fileID: 7124646266804579058}
-  - {fileID: 7228339081748442323}
-  - {fileID: -4177189824120048643}
-  - {fileID: 257877241263985141}
-  - {fileID: 464741171117019174}
 --- !u!114 &257877241263985141
 MonoBehaviour:
   m_ObjectHideFlags: 3
@@ -830,6 +822,15 @@ MonoBehaviour:
   occlusionOnlyReflectionNormalization:
     m_OverrideState: 1
     m_Value: 1
+  intensityMultiplier:
+    m_OverrideState: 1
+    m_Value: 1
+  skyOcclusionIntensityMultiplier:
+    m_OverrideState: 1
+    m_Value: 1
+  worldOffset:
+    m_OverrideState: 1
+    m_Value: {x: 0, y: 0, z: 0}
 --- !u!114 &5336505937369043736
 MonoBehaviour:
   m_ObjectHideFlags: 3
