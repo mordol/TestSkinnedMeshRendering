@@ -4,6 +4,9 @@
 EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
-  m_Scenes: []
+  m_Scenes:
+  - enabled: 1
+    path: Assets/Scenes/ZombieShooter/ZombieShooter_TestStage.unity
+    guid: 94b55183f6eddaa47b28b7f83d8ff6ac
   m_configObjects: {}
   m_UseUCBPForAssetBundles: 0
