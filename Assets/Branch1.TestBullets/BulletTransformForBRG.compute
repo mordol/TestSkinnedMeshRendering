@@ -1,11 +1,12 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel BulletTransformForBRG
 #pragma kernel BulletTransformForBRG_InitBullets
-#pragma kernel BulletTransformForBRG_GetVisibleInstanceCount
 
 // For instance data (BRG SSBO)
 RWByteAddressBuffer _InstanceData;
 int _InstanceCount;
+
+RWStructuredBuffer<int> _VisibleInstances;
 
 struct Bullet
 {
@@ -17,12 +18,8 @@ RWStructuredBuffer<Bullet> _Bullets;
 // Bullet visible flags
 RWStructuredBuffer<int> _VisibleFlags;
 
-RWStructuredBuffer<int> _VisibleOnlyFlags;
-RWStructuredBuffer<int> _VisibleCount;  // 1 element
-
 RWStructuredBuffer<float3> _FireVectors;
 
-RWStructuredBuffer<int> _NotCulledFlags;
 StructuredBuffer<float4> _FrustumPlanes;
 
 float _BulletSpeed;
@@ -107,13 +104,19 @@ void BulletTransformForBRG (uint3 id : SV_DispatchThreadID)
     if (accumulatedDistance > 20.0)
     {
         _VisibleFlags[id.x] = 0;
+        _VisibleInstances[id.x] = -1;
         accumulatedDistance = 0.0;
+    }
+    else if (!IsPointInFrustum(newPosition))
+    {
+        _VisibleInstances[id.x] = -1;
+    }
+    else
+    {
+        _VisibleInstances[id.x] = id.x;
     }
 
     _Bullets[id.x].accumulatedDistance = accumulatedDistance;
-
-    bool isNotCulled = IsPointInFrustum(newPosition);
-    _NotCulledFlags[id.x] = isNotCulled ? 1 : 0;
 
     // TODO: worldToObject also needs to be recalculated
 }
@@ -136,19 +139,4 @@ void BulletTransformForBRG_InitBullets (uint3 id : SV_DispatchThreadID)
             ++index;
         }
     }
-}
-
-[numthreads(1,1,1)]
-void BulletTransformForBRG_GetVisibleInstanceCount(uint3 id : SV_DispatchThreadID)
-{
-    int count = 0;
-    for (int i = 0; i < _InstanceCount; i++)
-    {
-        if (_VisibleFlags[i] > 0 && _NotCulledFlags[i] > 0)
-        {
-            _VisibleOnlyFlags[count++] = i;
-        }
-    }
-
-    _VisibleCount[0] = count;
 }

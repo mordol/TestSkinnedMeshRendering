@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
@@ -15,9 +14,6 @@ public class BulletShooterBRG : MonoBehaviour
     public float pingPongSpeed = 2f; // Ping Pong 속도
     public int spawnCount = 1000;
     public bool autoFire = false;
-    
-    [SerializeField, ReadOnly]
-    int bulletCount = 0;
 
     public Material bulletMaterial;
 
@@ -27,8 +23,6 @@ public class BulletShooterBRG : MonoBehaviour
     const string kComputeShaderName = "BulletTransformForBRG";
     int m_KernelIndex_InitBullets;
     const string kComputeShaderName_InitBullets = "BulletTransformForBRG_InitBullets";
-    int m_KernelIndex_GetVisibleInstanceCount;
-    const string kComputeShaderName_GetVisibleInstanceCount = "BulletTransformForBRG_GetVisibleInstanceCount";
     
     // For BRG
     BatchRendererGroup m_BRG;
@@ -39,12 +33,17 @@ public class BulletShooterBRG : MonoBehaviour
     BatchMeshID m_BatchMeshID;
     BatchMaterialID m_BatchMaterialID;
 
+    bool UseConstantBuffer => BatchRendererGroup.BufferTarget == BatchBufferTarget.ConstantBuffer;
+
+    // GPU indexed indirect buffer
+    GraphicsBuffer m_GpuIndexedIndirectBuffer;
+    private uint m_GpuVisibleInstancesWindow;
+    uint m_ElementsPerDraw;
+
     // instance visible flags
-    ComputeBuffer m_InstanceVisibleBuffer;
-    int[] m_InstanceVisibleOnlyFlags;
-    ComputeBuffer m_InstanceVisibleOnlyFlagsBuffer;
-    int[] m_InstanceVisibleCount;
-    ComputeBuffer m_InstanceVisibleCountBuffer;
+    NativeArray<int> m_SysmemVisibleInstances;
+    GraphicsBuffer m_InstanceVisibleBuffer;
+    ComputeBuffer m_InstanceVisibleFlagsBuffer;
 
     // bullet data
     struct Bullet
@@ -79,7 +78,15 @@ public class BulletShooterBRG : MonoBehaviour
     // Some helper constants to make calculations more convenient.
     const int kBytesPerInstance = (Size.kSizeOfPackedMatrix * 2);	// 96
     const int kExtraBytes = Size.kSizeOfMatrix * 2;		// 128
-    
+
+
+    public unsafe static T* Malloc<T>(int count) where T : unmanaged
+    {
+        return (T*)UnsafeUtility.Malloc(
+            UnsafeUtility.SizeOf<T>() * count,
+            UnsafeUtility.AlignOf<T>(),
+            Allocator.TempJob);
+    }
 
     void Start()
     {
@@ -103,12 +110,12 @@ public class BulletShooterBRG : MonoBehaviour
         };
         mesh.RecalculateNormals();
         mesh.RecalculateBounds();
+        m_ElementsPerDraw = mesh.GetIndexCount(0);
         m_BatchMeshID = m_BRG.RegisterMesh(mesh);
         m_BatchMaterialID = m_BRG.RegisterMaterial(bulletMaterial);
         
         m_KernelIndex = bulletTransformComputeShader.FindKernel(kComputeShaderName);
         m_KernelIndex_InitBullets = bulletTransformComputeShader.FindKernel(kComputeShaderName_InitBullets);
-        m_KernelIndex_GetVisibleInstanceCount = bulletTransformComputeShader.FindKernel(kComputeShaderName_GetVisibleInstanceCount);
         
         bulletTransformComputeShader.SetFloat("_BulletSpeed", 5f);
         
@@ -163,12 +170,6 @@ public class BulletShooterBRG : MonoBehaviour
 
         // Update bullets
         bulletTransformComputeShader.Dispatch(m_KernelIndex, Mathf.CeilToInt(spawnCount / 64f), 1, 1);
-
-        // Get visible instance count from compute shader
-        bulletTransformComputeShader.Dispatch(m_KernelIndex_GetVisibleInstanceCount, 1, 1, 1);
-        m_InstanceVisibleOnlyFlagsBuffer.GetData(m_InstanceVisibleOnlyFlags);
-        m_InstanceVisibleCountBuffer.GetData(m_InstanceVisibleCount);
-        bulletCount = m_InstanceVisibleCount[0];        
     }
 
     float FireBullet(float fireTimer)
@@ -219,7 +220,6 @@ public class BulletShooterBRG : MonoBehaviour
         m_FireVectorsBuffer.SetData(m_FireVectors);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_FireVectors", m_FireVectorsBuffer);
 
-
         // Initialize _Bullets
         var bullets = new Bullet[spawnCount];
         for (int i = 0; i < spawnCount; i++)
@@ -232,35 +232,47 @@ public class BulletShooterBRG : MonoBehaviour
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_Bullets", m_BulletsBuffer);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_Bullets", m_BulletsBuffer);
 
+        // Initialize _GpuIndexedIndirectBuffer
+        m_GpuIndexedIndirectBuffer = new GraphicsBuffer(GraphicsBuffer.Target.IndirectArguments, spawnCount, GraphicsBuffer.IndirectDrawIndexedArgs.size);
+        var indexedIndirectData = new GraphicsBuffer.IndirectDrawIndexedArgs[1];
+        for (uint i = 0; i < 1; ++i)
+        {
+            indexedIndirectData[i] = new GraphicsBuffer.IndirectDrawIndexedArgs
+            {
+                indexCountPerInstance = m_ElementsPerDraw,
+                instanceCount = (uint)spawnCount,
+                startIndex = 0,
+                baseVertexIndex = 0,
+                startInstance = 0,
+            };
+        }
+        m_GpuIndexedIndirectBuffer.SetData(indexedIndirectData);
 
         // Initialize _VisibleFlags
-        m_InstanceVisibleBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleFlags", m_InstanceVisibleBuffer);
-        bulletMaterial.SetBuffer("_VisibleFlags", m_InstanceVisibleBuffer);
-        
-        // Initialize _VisibleOnlyFlags
-        m_InstanceVisibleOnlyFlags = new int[spawnCount];
-        m_InstanceVisibleOnlyFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
-        bulletMaterial.SetBuffer("_VisibleOnlyFlags", m_InstanceVisibleOnlyFlagsBuffer);
+        m_SysmemVisibleInstances = new NativeArray<int>(spawnCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
+        for (int i = 0; i < spawnCount; i++)
+        {
+            m_SysmemVisibleInstances[i] = i;
+        }
 
-        // Initialize _VisibleCount
-        m_InstanceVisibleCountBuffer = new ComputeBuffer(1, sizeof(int));
-        m_InstanceVisibleCount = new int[1] { 0 };
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_VisibleCount", m_InstanceVisibleCountBuffer);
-        bulletMaterial.SetInt("_VisibleFlagsCount", 0);
+        var instanceValues = new NativeArray<int>(spawnCount, Allocator.Temp, NativeArrayOptions.UninitializedMemory);
+        for (int i = 0; i < spawnCount; i++)
+        {
+            instanceValues[i] = -1;
+        }
+
+        m_InstanceVisibleBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, sizeof(int) * spawnCount, sizeof(int));
+        m_InstanceVisibleBuffer.SetData(instanceValues);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleInstances", m_InstanceVisibleBuffer);
+
+        m_InstanceVisibleFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
+        m_InstanceVisibleFlagsBuffer.SetData(instanceValues);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_VisibleFlags", m_InstanceVisibleFlagsBuffer);
+        bulletTransformComputeShader.SetBuffer(m_KernelIndex_InitBullets, "_VisibleFlags", m_InstanceVisibleFlagsBuffer);
 
         // Initialize _FrustumPlanes
         m_FrustumPlanesBuffer = new ComputeBuffer(6, sizeof(float) * 4);
         bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_FrustumPlanes", m_FrustumPlanesBuffer);
-
-        // Initialize _NotCulledFlags
-        m_NotCulledFlagsBuffer = new ComputeBuffer(spawnCount, sizeof(int));
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex, "_NotCulledFlags", m_NotCulledFlagsBuffer);
-        bulletTransformComputeShader.SetBuffer(m_KernelIndex_GetVisibleInstanceCount, "_NotCulledFlags", m_NotCulledFlagsBuffer);
-
 
         // Place a zero matrix at the start of the instance data buffer, so loads from address 0 return zero.
         var zero = new Matrix4x4[1] { Matrix4x4.zero };
@@ -348,22 +360,27 @@ public class BulletShooterBRG : MonoBehaviour
             m_BulletsBuffer = null;
         }
 
+        if (m_GpuIndexedIndirectBuffer != null)
+        {
+            m_GpuIndexedIndirectBuffer.Release();
+            m_GpuIndexedIndirectBuffer = null;
+        }
+
+        if (m_SysmemVisibleInstances != null)
+        {
+            m_SysmemVisibleInstances.Dispose();
+        }
+
         if (m_InstanceVisibleBuffer != null)
         {
             m_InstanceVisibleBuffer.Release();
             m_InstanceVisibleBuffer = null;
         }
 
-        if (m_InstanceVisibleOnlyFlagsBuffer != null)
+        if (m_InstanceVisibleFlagsBuffer != null)
         {
-            m_InstanceVisibleOnlyFlagsBuffer.Release();
-            m_InstanceVisibleOnlyFlagsBuffer = null;
-        }
-
-        if (m_InstanceVisibleCountBuffer != null)
-        {
-            m_InstanceVisibleCountBuffer.Release();
-            m_InstanceVisibleCountBuffer = null;
+            m_InstanceVisibleFlagsBuffer.Release();
+            m_InstanceVisibleFlagsBuffer = null;
         }
 
         if (m_FireVectorsBuffer != null)
@@ -391,16 +408,28 @@ public class BulletShooterBRG : MonoBehaviour
         BatchCullingOutput cullingOutput,
         IntPtr userContext)
     {
-        var visibleInstanceCount = m_InstanceVisibleCount[0];
-
         // UnsafeUtility.Malloc() requires an alignment, so use the largest integer type's alignment
         // which is a reasonable default.
-        int alignment = UnsafeUtility.AlignOf<long>();
+        //int alignment = UnsafeUtility.AlignOf<long>();
 
         // Acquire a pointer to the BatchCullingOutputDrawCommands struct so you can easily
         // modify it directly.
         var drawCommands = (BatchCullingOutputDrawCommands*)cullingOutput.drawCommands.GetUnsafePtr();
         
+        // This example doesn't care about shadows or motion vectors, so it leaves everything
+        // at the default zero values, except the renderingLayerMask which it sets to all ones
+        // so Unity renders the instances regardless of mask settings.
+        var filterSettings = new BatchFilterSettings
+        {
+            renderingLayerMask = 0xffffffff
+            // layer = 0,
+            // motionMode = MotionVectorGenerationMode.ForceNoMotion,
+            // shadowCastingMode = ShadowCastingMode.On,
+            // receiveShadows = true,
+            // staticShadowCaster = false,
+            // allDepthSorted = false
+        };
+
         // Allocate memory for the output arrays. In a more complicated implementation, you would calculate
         // the amount of memory to allocate dynamically based on what is visible.
         // This example assumes that all of the instances are visible and thus allocates
@@ -409,54 +438,51 @@ public class BulletShooterBRG : MonoBehaviour
         // - a single draw range (which covers our single draw command)
         // - kNumInstances visible instance indices.
         // You must always allocate the arrays using Allocator.TempJob.
-        drawCommands->drawCommands = (BatchDrawCommand*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawCommand>(), alignment, Allocator.TempJob);
-        drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
-        
-        drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(visibleInstanceCount * sizeof(int), alignment, Allocator.TempJob);
-        drawCommands->visibleInstanceCount = visibleInstanceCount;
-
-        drawCommands->drawCommandPickingInstanceIDs = null;
-        drawCommands->drawCommandCount = 1;
+        //drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
+        drawCommands->drawRanges = Malloc<BatchDrawRange>(1);
         drawCommands->drawRangeCount = 1;
+
+        // Configure the single draw range to cover the single draw command which
+        // is at offset 0.
+        drawCommands->drawRanges[0].drawCommandsType = BatchDrawCommandType.Indirect;
+        drawCommands->drawRanges[0].drawCommandsBegin = 0;
+        drawCommands->drawRanges[0].drawCommandsCount = (ushort)1;
+        drawCommands->drawRanges[0].filterSettings = filterSettings;
+
+        drawCommands->visibleInstances = Malloc<int>(spawnCount);
+        UnsafeUtility.MemCpy(drawCommands->visibleInstances, m_SysmemVisibleInstances.GetUnsafePtr(), spawnCount * sizeof(int));
+        drawCommands->visibleInstanceCount = spawnCount;
+
+        drawCommands->indirectDrawCommandCount = 1;
+        drawCommands->indirectDrawCommands = Malloc<BatchDrawCommandIndirect>(1);
+
+        for (uint i = 0; i < drawCommands->indirectDrawCommandCount; i++)
+        {
+            // https://docs.unity3d.com/6000.0/Documentation/ScriptReference/Rendering.BatchDrawCommandIndirect.html
+            drawCommands->indirectDrawCommands[i] = new BatchDrawCommandIndirect
+            {
+                flags = BatchDrawCommandFlags.None,
+                batchID = m_BatchID,
+                materialID = m_BatchMaterialID,
+                meshID = m_BatchMeshID,
+                splitVisibilityMask = 0xff,
+                sortingPosition = 0,
+                visibleOffset = 0,
+                topology = MeshTopology.Triangles,
+
+                visibleInstancesBufferHandle = m_InstanceVisibleBuffer.bufferHandle,
+                visibleInstancesBufferWindowOffset = 0,
+                visibleInstancesBufferWindowSizeBytes = m_GpuVisibleInstancesWindow,
+
+                indirectArgsBufferHandle = m_GpuIndexedIndirectBuffer.bufferHandle,
+                indirectArgsBufferOffset = i * GraphicsBuffer.IndirectDrawIndexedArgs.size,
+            };
+        }
 
         // This example doens't use depth sorting, so it leaves instanceSortingPositions as null.
         drawCommands->instanceSortingPositions = null;
         drawCommands->instanceSortingPositionFloatCount = 0;
-
-        // Configure the single draw command to draw kNumInstances instances
-        // starting from offset 0 in the array, using the batch, material and mesh
-        // IDs registered in the Start() method. It doesn't set any special flags.
-        drawCommands->drawCommands[0].visibleOffset = 0;
-        drawCommands->drawCommands[0].visibleCount = (uint)visibleInstanceCount;
-        drawCommands->drawCommands[0].batchID = m_BatchID;
-        drawCommands->drawCommands[0].materialID = m_BatchMaterialID;
-        drawCommands->drawCommands[0].meshID = m_BatchMeshID;
-        drawCommands->drawCommands[0].submeshIndex = (ushort)0;
-        drawCommands->drawCommands[0].splitVisibilityMask = 0xff;
-        drawCommands->drawCommands[0].flags = 0;
-        drawCommands->drawCommands[0].sortingPosition = 0;
-        
-        // Configure the single draw range to cover the single draw command which
-        // is at offset 0.
-        drawCommands->drawRanges[0].drawCommandsType = BatchDrawCommandType.Direct;
-        drawCommands->drawRanges[0].drawCommandsBegin = 0;
-        drawCommands->drawRanges[0].drawCommandsCount = (ushort)1;
-
-        // This example doesn't care about shadows or motion vectors, so it leaves everything
-        // at the default zero values, except the renderingLayerMask which it sets to all ones
-        // so Unity renders the instances regardless of mask settings.
-        drawCommands->drawRanges[0].filterSettings = new BatchFilterSettings { renderingLayerMask = 0xffffffff, };
-
-        // Finally, write the actual visible instance indices to the array. In a more complicated
-        // implementation, this output would depend on what is visible, but this example
-        // assumes that everything is visible.
-
-        // Simple traversal to extract visible index from visibleFlog
-        for (int i = 0; i < visibleInstanceCount; i++)
-        {
-            drawCommands->visibleInstances[i] = m_InstanceVisibleOnlyFlags[i];
-        }
-        
+                
         // This example doesn't use jobs, so it can return an empty JobHandle.
         // Performance-sensitive applications should use Burst jobs to implement
         // culling and draw command output. In this case, this function would return a
