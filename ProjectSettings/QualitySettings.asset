@@ -181,5 +181,5 @@ QualitySettings:
     WebGL: 1
     Windows Store Apps: 2
     XboxOne: 2
-    iPhone: 1
+    iPhone: 0
     tvOS: 1
